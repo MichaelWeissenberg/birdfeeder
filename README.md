@@ -14,4 +14,7 @@ Features:
 - Lightweight Flask web interface
 - Docker-based deployment
 
-The project was designed with a strong KISS (Keep It Simple, Stupid) philosophy and replaces a more complex stack consisting of Frigate, go2rtc and WatchMyBirds.
+The project was designed with a strong KISS (Keep It Short & Simple) philosophy and replaces a more complex stack consisting of Frigate + WhoIsAtMyFeeder sidecar, go2rtc and WatchMyBirds.
+
+[!NOTE]
+AI Usage Notice: This project was initially bootstrapped using AI-assisted tools ("vibe coding") and subsequently reviewed, refactored, and tested manually to ensure code quality and safety.
