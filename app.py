@@ -23,6 +23,9 @@ DETECTION_THRESHOLD = float(
 CLASSIFICATION_THRESHOLD = float(
     os.getenv("CLASSIFICATION_THRESHOLD", "0.30")
 )
+CLASSIFICATION_MARGIN = float(
+    os.getenv("CLASSIFICATION_MARGIN", "0.10")
+)
 
 DATA_DIR = Path("/data")
 SNAPSHOT_DIR = DATA_DIR / "snapshots"
@@ -196,11 +199,29 @@ def main() -> int:
             else None
         )
 
+        second_result = (
+            classifications[1]
+            if len(classifications) > 1
+            else None
+        )
+
+        top_score = float(
+            top_result.get("score", 0)
+            if top_result
+            else 0
+        )
+        second_score = float(
+            second_result.get("score", 0)
+            if second_result
+            else 0
+        )
+        score_margin = top_score - second_score
+
         accepted = bool(
             top_result
             and top_result.get("label") != "background"
-            and float(top_result.get("score", 0))
-            >= CLASSIFICATION_THRESHOLD
+            and top_score >= CLASSIFICATION_THRESHOLD
+            and score_margin >= CLASSIFICATION_MARGIN
         )
 
         record = {
@@ -209,16 +230,40 @@ def main() -> int:
             "crop": str(crop_path),
             "detector": detection,
             "classifications": classifications,
+            "decision": {
+                "top_score": top_score,
+                "second_score": second_score,
+                "margin": score_margin,
+                "required_score": CLASSIFICATION_THRESHOLD,
+                "required_margin": CLASSIFICATION_MARGIN,
+            },
             "accepted": accepted,
         }
 
         records.append(record)
 
-        if top_result:
+        if not top_result:
             print(
-                "Ergebnis:",
+                f"Vogel {number}: "
+                "Keine Artenklassifikation verfügbar."
+            )
+        elif accepted:
+            print(
+                f"Vogel {number}:",
                 top_result.get("label"),
-                f"{float(top_result.get('score', 0)):.2%}",
+                f"{top_score:.2%}",
+                f"(Abstand {score_margin:.2%})",
+            )
+        else:
+            print(
+                f"Vogel {number}: "
+                "Art nicht sicher bestimmbar."
+            )
+            print(
+                "  Bester Vorschlag:",
+                top_result.get("label"),
+                f"{top_score:.2%}",
+                f"(Abstand {score_margin:.2%})",
             )
 
     result_path = DATA_DIR / f"{timestamp}.json"
