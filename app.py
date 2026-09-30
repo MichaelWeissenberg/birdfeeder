@@ -4,11 +4,38 @@ import json
 import os
 import subprocess
 import sys
+import signal
+import time
+
 from datetime import datetime
 from pathlib import Path
 
 import requests
 from PIL import Image
+
+
+RUN_ONCE = os.getenv("RUN_ONCE", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
+
+
+try:
+    INTERVAL_SECONDS = float(
+        os.getenv("INTERVAL_SECONDS", "5")
+    )
+except ValueError as exc:
+    raise RuntimeError(
+        "INTERVAL_SECONDS muss eine Zahl sein"
+    ) from exc
+
+if INTERVAL_SECONDS <= 0:
+    raise RuntimeError(
+        "INTERVAL_SECONDS muss größer als 0 sein"
+    )
 
 
 CAMERA_URL = os.environ["CAMERA_URL"]
@@ -151,7 +178,30 @@ def classify_bird(image_path: Path) -> list[dict]:
     return result.get("results", [])
 
 
-def main() -> int:
+stop_requested = False
+
+
+def request_stop(
+    signum: int,
+    frame: object,
+) -> None:
+    del signum, frame
+
+    global stop_requested
+    stop_requested = True
+
+    print(
+        "Stoppsignal empfangen. "
+        "Birdfeeder wird sauber beendet.",
+        flush=True,
+    )
+
+
+signal.signal(signal.SIGTERM, request_stop)
+signal.signal(signal.SIGINT, request_stop)
+
+
+def run_once() -> int:
     SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
     CROP_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -278,6 +328,51 @@ def main() -> int:
     )
 
     print(f"Ergebnis gespeichert: {result_path}")
+    return 0
+
+
+def main() -> int:
+    if RUN_ONCE:
+        return run_once()
+
+    print(
+        "Birdfeeder läuft im Dauerbetrieb.",
+        flush=True,
+    )
+    print(
+        f"Analyseintervall: {INTERVAL_SECONDS:.1f} Sekunden",
+        flush=True,
+    )
+
+    while not stop_requested:
+        started_at = time.monotonic()
+
+        try:
+            run_once()
+        except Exception as exc:
+            print(
+                f"Durchlauf fehlgeschlagen: "
+                f"{type(exc).__name__}: {exc}",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        elapsed = time.monotonic() - started_at
+        remaining = max(
+            0.0,
+            INTERVAL_SECONDS - elapsed,
+        )
+
+        while remaining > 0 and not stop_requested:
+            sleep_for = min(0.5, remaining)
+            time.sleep(sleep_for)
+            remaining -= sleep_for
+
+    print(
+        "Birdfeeder wurde beendet.",
+        flush=True,
+    )
+
     return 0
 
 

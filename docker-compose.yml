@@ -16,3 +16,7 @@ services:
       - /srv/birdfeeder:/data
 
     restart: "no"
+
+    environment:
+      RUN_ONCE: "false"
+      INTERVAL_SECONDS: "5"
