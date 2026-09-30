@@ -13,5 +13,7 @@ RUN pip install --no-cache-dir \
 WORKDIR /app
 
 COPY app.py /app/app.py
+COPY benchmark_species.py /app/benchmark_species.py
+COPY web.py /app/web.py
 
 CMD ["python", "/app/app.py"]
