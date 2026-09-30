@@ -1,0 +1,18 @@
+services:
+  birdfeeder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: birdfeeder-atlas:local
+    container_name: birdfeeder
+
+    network_mode: host
+
+    env_file:
+      - .env
+
+    volumes:
+      - /srv/birdfeeder:/data
+
+    restart: "no"
