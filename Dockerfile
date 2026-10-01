@@ -5,10 +5,10 @@ RUN apt-get update \
        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
+COPY requirements.txt /app/requirements.txt
+
 RUN pip install --no-cache-dir \
-    flask \
-    pillow \
-    requests
+    -r /app/requirements.txt
 
 WORKDIR /app
 
