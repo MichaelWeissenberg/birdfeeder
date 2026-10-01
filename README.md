@@ -166,14 +166,11 @@ Planned improvements:
 
 ## License
 
-This project is licensed under the
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0).
 
-**Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)**
+You are free to use, modify and redistribute this software under the terms
+of the GPL.
 
-You are free to use, modify, and redistribute this project provided that attribution is given and derivative works are released under the same license.
-
-For details see:
-
-https://creativecommons.org/licenses/by-sa/4.0/
+See the LICENSE file for details.
 
 ---
