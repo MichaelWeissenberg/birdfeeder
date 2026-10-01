@@ -1187,9 +1187,3 @@ Planned Version 2 features include:
 - [Camera Configuration](CAMERAS.md)
 - [Coral Edge TPU Integration](CORAL.md)
 - [Docker Compose environment variables](https://docs.docker.com/compose/how-tos/environment-variables/)
-EOF
-
-echo
-echo "Created docs/DEPLOYMENT.md"
-wc -l docs/DEPLOYMENT.md
-git status --short
