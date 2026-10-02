@@ -1168,20 +1168,6 @@ Do not expose:
 
 directly to the public internet.
 
-## Planned improvements
-
-Planned Version 2 features include:
-
-- a documented `.env.example`
-- Python dependency management through `requirements.txt`
-- German common bird names
-- a configurable 90-day retention policy
-- deletion of individual observations through the web interface
-- deletion of all observations through the web interface
-- display of storage usage
-- observation statistics
-- improved public deployment documentation
-
 ## Related documentation
 
 - [Camera Configuration](CAMERAS.md)
