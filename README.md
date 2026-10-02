@@ -1,3 +1,9 @@
+![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)
+![Coral TPU](https://img.shields.io/badge/Hardware-Coral%20TPU-FF6F00)
+
+
 TL:DR Lightweight bird feeder monitoring system powered by Google Coral TPU. Captures RTSP camera snapshots, detects birds, classifies species, stores observations as JSON records, and provides a simple Flask-based web interface for browsing bird visitors and image crops.
 
 # Birdfeeder
