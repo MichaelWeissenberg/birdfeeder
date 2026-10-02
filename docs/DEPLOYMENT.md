@@ -517,7 +517,7 @@ docker compose build birdfeeder
 The reference deployment names the resulting image:
 
 ```text
-birdfeeder-atlas:local
+birdfeeder:local
 ```
 
 The `birdfeeder-web` service does not have its own `build` section.
