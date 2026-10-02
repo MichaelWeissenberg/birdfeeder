@@ -221,9 +221,9 @@ PAGE_TEMPLATE = """
                                 {% endif %}"
                             >
                                 {% if observation.accepted %}
-                                    Sicher erkannt:
+                                    {{ ui_text.accepted_detection }}
                                 {% else %}
-                                    Unsicherer Vorschlag:
+                                    {{ ui_text.uncertain_detection }}
                                 {% endif %}
 
                                 {{ observation.score }}
