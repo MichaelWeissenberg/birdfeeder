@@ -28,6 +28,36 @@ ui_text = ui_translations.get(
     ui_translations["en"],
 )
 
+with open(
+    "translations/birds.json",
+    encoding="utf-8",
+) as bird_names_file:
+    bird_translations = json.load(
+        bird_names_file
+    )
+
+bird_names = bird_translations.get(
+    LANGUAGE,
+    bird_translations["en"],
+)
+
+def extract_scientific_name(
+    label: str,
+) -> str:
+    return label.split(" (")[0].strip()
+
+def translate_bird_name(
+    label: str,
+) -> str:
+    scientific_name = extract_scientific_name(
+        label
+    )
+
+    return bird_names.get(
+        scientific_name,
+        scientific_name,
+    )
+
 DATA_DIR = Path(
     os.getenv("DATA_DIR", "/data")
 ).resolve()
@@ -162,6 +192,40 @@ PAGE_TEMPLATE = """
             font-weight: 700;
         }
 
+        .scientific-name {
+            margin: 0.2rem 0 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+            font-style: italic;
+        }
+
+        .possible-match {
+            display: grid;
+            gap: 0.15rem;
+            margin: 0.75rem 0 0;
+            padding: 0.65rem 0.75rem;
+            border-left: 3px solid #b87820;
+            background: #fff8ec;
+            font-size: 0.9rem;
+        }
+
+        .possible-match-label {
+            color: var(--muted);
+            font-size: 0.8rem;
+        }
+
+        .possible-match-scientific-name {
+            color: var(--muted);
+            font-size: 0.8rem;
+            font-style: italic;
+        }
+
+        .possible-match-score {
+            color: #8a5a19;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+
         .time {
             margin: 0.75rem 0 0;
             color: var(--muted);
@@ -214,20 +278,53 @@ PAGE_TEMPLATE = """
                                 {{ observation.label }}
                             </h2>
 
-                            <p
-                                class="confidence
-                                {% if not observation.accepted %}
-                                    uncertain
-                                {% endif %}"
-                            >
-                                {% if observation.accepted %}
-                                    {{ ui_text.accepted_detection }}
-                                {% else %}
-                                    {{ ui_text.uncertain_detection }}
-                                {% endif %}
+                            {% if observation.scientific_name %}
+                                <p class="scientific-name">
+                                    {{ observation.scientific_name }}
+                                </p>
+                            {% endif %}
 
-                                {{ observation.score }}
-                            </p>
+                            {% if observation.possible_match %}
+                                <div class="possible-match">
+                                    <span class="possible-match-label">
+                                        {{ ui_text.possible_match }}
+                                    </span>
+
+                                    <strong>
+                                        {{ observation.possible_match }}
+                                    </strong>
+
+                                    {% if observation.possible_match_scientific_name %}
+                                        <span class="possible-match-scientific-name">
+                                            {{ observation.possible_match_scientific_name }}
+                                        </span>
+                                    {% endif %}
+
+                                    {% if observation.possible_match_score %}
+                                        <span class="possible-match-score">
+                                            {{ ui_text.uncertain_detection }}
+                                            {{ observation.possible_match_score }}
+                                        </span>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+
+                            {% if not observation.possible_match %}
+                                <p
+                                    class="confidence
+                                    {% if not observation.accepted %}
+                                        uncertain
+                                    {% endif %}"
+                                >
+                                    {% if observation.accepted %}
+                                        {{ ui_text.accepted_detection }}
+                                    {% else %}
+                                        {{ ui_text.uncertain_detection }}
+                                    {% endif %}
+
+                                    {{ observation.score }}
+                                </p>
+                            {% endif %}
 
                             <p class="time">
                                 {{ observation.timestamp }}
@@ -316,13 +413,10 @@ def read_observations(limit: int = 30) -> tuple[list[dict], int]:
                 else {}
             )
 
-            label = top_result.get(
+            original_label = top_result.get(
                 "label",
-                ui_text["unknown_species"],
+                "background",
             )
-
-            if label == "background":
-                label = ui_text["unknown_species"]
 
             score = float(
                 top_result.get(
@@ -330,6 +424,53 @@ def read_observations(limit: int = 30) -> tuple[list[dict], int]:
                     0,
                 )
             )
+
+            possible_match = None
+            possible_match_scientific_name = None
+            possible_match_score = None
+
+            if original_label == "background":
+                label = ui_text["unknown_species"]
+                scientific_name = None
+
+                best_species_result = next(
+                    (
+                        classification
+                        for classification in classifications
+                        if classification.get("label") != "background"
+                    ),
+                    None,
+                )
+
+                if best_species_result:
+                    possible_match_original_label = (
+                        best_species_result.get(
+                            "label",
+                            "",
+                        )
+                    )
+
+                    possible_match_scientific_name = (
+                        extract_scientific_name(
+                            possible_match_original_label
+                        )
+                    )
+
+                    possible_match = translate_bird_name(
+                        possible_match_original_label
+                    )
+
+                    possible_match_score = (
+                        f"{float(best_species_result.get('score', 0)):.1%}"
+                    )
+            else:
+                scientific_name = extract_scientific_name(
+                    original_label
+                )
+
+                label = translate_bird_name(
+                    original_label
+                )
 
             observations.append(
                 {
@@ -346,7 +487,13 @@ def read_observations(limit: int = 30) -> tuple[list[dict], int]:
                         )
                     ),
                     "label": label,
+                    "scientific_name": scientific_name,
                     "score": f"{score:.1%}",
+                    "possible_match": possible_match,
+                    "possible_match_scientific_name": (
+                        possible_match_scientific_name
+                        ),
+                    "possible_match_score": possible_match_score,
                     "image": safe_media_url(
                         record.get("crop")
                     ),

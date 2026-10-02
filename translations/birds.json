@@ -1,0 +1,46 @@
+{
+  "de": {
+    "Turdus merula": "Amsel",
+    "Turdus pilaris": "Wacholderdrossel",
+    "Turdus philomelos": "Singdrossel",
+    "Erithacus rubecula": "Rotkehlchen",
+    "Parus major": "Kohlmeise",
+    "Cyanistes caeruleus": "Blaumeise",
+    "Poecile palustris": "Sumpfmeise",
+    "Lophophanes cristatus": "Haubenmeise",
+    "Aegithalos caudatus": "Schwanzmeise",
+    "Passer domesticus": "Haussperling",
+    "Passer montanus": "Feldsperling",
+    "Fringilla coelebs": "Buchfink",
+    "Chloris chloris": "Grünfink",
+    "Carduelis carduelis": "Stieglitz",
+    "Spinus spinus": "Erlenzeisig",
+    "Coccothraustes coccothraustes": "Kernbeißer",
+    "Pyrrhula pyrrhula": "Gimpel",
+    "Sitta europaea": "Kleiber",
+    "Certhia brachydactyla": "Gartenbaumläufer",
+    "Pica pica": "Elster",
+    "Garrulus glandarius": "Eichelhäher",
+    "Corvus monedula": "Dohle",
+    "Corvus corone": "Rabenkrähe",
+    "Columba palumbus": "Ringeltaube",
+    "Streptopelia decaocto": "Türkentaube",
+    "Picus viridis": "Grünspecht",
+    "Dendrocopos major": "Buntspecht",
+    "Troglodytes troglodytes": "Zaunkönig",
+    "Motacilla alba": "Bachstelze"
+  },
+
+  "en": {
+    "Turdus merula": "Eurasian Blackbird",
+    "Turdus pilaris": "Fieldfare",
+    "Turdus philomelos": "Song Thrush",
+    "Erithacus rubecula": "European Robin",
+    "Parus major": "Great Tit",
+    "Cyanistes caeruleus": "Blue Tit",
+    "Poecile palustris": "Marsh Tit",
+    "Lophophanes cristatus": "Crested Tit",
+    "Aegithalos caudatus": "Long-tailed Tit",
+    "Passer domesticus": "House Sparrow"
+  }
+}
