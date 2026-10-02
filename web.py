@@ -4,6 +4,29 @@ from pathlib import Path
 
 from flask import Flask, abort, render_template_string, send_file
 
+LANGUAGE = os.getenv(
+    "LANGUAGE",
+    "en"
+).lower()
+
+SUPPORTED_LANGUAGES = {
+    "en",
+    "de",
+}
+
+if LANGUAGE not in SUPPORTED_LANGUAGES:
+    LANGUAGE = "en"
+
+with open(
+    "translations/ui.json",
+    encoding="utf-8",
+) as ui_text_file:
+    ui_translations = json.load(ui_text_file)
+
+ui_text = ui_translations.get(
+    LANGUAGE,
+    ui_translations["en"],
+)
 
 DATA_DIR = Path(
     os.getenv("DATA_DIR", "/data")
@@ -26,7 +49,7 @@ app = Flask(__name__)
 
 PAGE_TEMPLATE = """
 <!doctype html>
-<html lang="de">
+<html lang="{{ language }}">
 <head>
     <meta charset="utf-8">
     <meta
@@ -39,7 +62,7 @@ PAGE_TEMPLATE = """
         content="30"
     >
 
-    <title>Wer ist an meinem Futterhaus?</title>
+    <title>{{ ui_text.page_title }}</title>
 
     <style>
         :root {
@@ -168,14 +191,14 @@ PAGE_TEMPLATE = """
 
 <body>
     <header>
-        <h1>Wer ist an meinem Futterhaus?</h1>
-        <p>Vogelerkennung mit Atlas und Coral TPU</p>
+        <h1>{{ ui_text.page_title }}</h1>
+        <p>{{ ui_text.page_subtitle }}</p>
     </header>
 
     <main>
         <div class="status">
-            {{ result_count }} gespeicherte Erkennungsergebnisse.
-            Die Seite aktualisiert sich automatisch.
+            {{ result_count }} {{ ui_text.status_results }}
+            {{ ui_text.status_autorefresh }}
         </div>
 
         {% if observations %}
@@ -215,17 +238,16 @@ PAGE_TEMPLATE = """
             </section>
         {% else %}
             <div class="empty">
-                <h2>Noch kein Vogel entdeckt</h2>
+                <h2>{{ ui_text.no_bird_detected }}</h2>
                 <p>
-                    Sobald Birdfeeder eine Aufnahme speichert,
-                    erscheint sie hier automatisch.
+                    {{ ui_text.waiting_for_first_observation }}
                 </p>
             </div>
         {% endif %}
     </main>
 
     <footer>
-        Birdfeeder auf Atlas
+        {{ ui_text.footer }}
     </footer>
 </body>
 </html>
@@ -296,11 +318,11 @@ def read_observations(limit: int = 30) -> tuple[list[dict], int]:
 
             label = top_result.get(
                 "label",
-                "Art nicht bestimmbar",
+                ui_text["unknown_species"],
             )
 
             if label == "background":
-                label = "Art nicht bestimmbar"
+                label = ui_text["unknown_species"]
 
             score = float(
                 top_result.get(
@@ -345,6 +367,8 @@ def index() -> str:
         PAGE_TEMPLATE,
         observations=observations,
         result_count=result_count,
+        language=LANGUAGE,
+        ui_text=ui_text
     )
 
 

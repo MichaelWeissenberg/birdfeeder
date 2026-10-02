@@ -1,0 +1,27 @@
+{
+  "en": {
+    "page_title": "Who is visiting my bird feeder?",
+    "page_subtitle": "Bird detection powered by Coral TPU",
+    "status_results": "stored detection results.",
+    "status_autorefresh": "This page refreshes automatically.",
+    "accepted_detection": "Confident detection:",
+    "uncertain_detection": "Uncertain suggestion:",
+    "no_bird_detected": "No bird detected yet",
+    "waiting_for_first_observation": "Observations will appear here automatically once Birdfeeder stores the first result.",
+    "unknown_species": "Species could not be identified",
+    "footer": "Birdfeeder GPLv3 Michael Weißenberg"
+  },
+
+  "de": {
+    "page_title": "Wer ist an meinem Futterhaus?",
+    "page_subtitle": "Vogelerkennung mit Coral TPU",
+    "status_results": "gespeicherte Erkennungsergebnisse.",
+    "status_autorefresh": "Die Seite aktualisiert sich automatisch.",
+    "accepted_detection": "Sicher erkannt:",
+    "uncertain_detection": "Unsicherer Vorschlag:",
+    "no_bird_detected": "Noch kein Vogel entdeckt",
+    "waiting_for_first_observation": "Sobald Birdfeeder eine Aufnahme speichert, erscheint sie hier automatisch.",
+    "unknown_species": "Art nicht bestimmbar",
+    "footer": "Birdfeeder GPLv3 Michael Weißenberg"
+  }
+}
