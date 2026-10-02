@@ -18,6 +18,11 @@ The project follows a strong KISS (Keep It Simple, Stupid) philosophy and was cr
 - Automatic crop generation
 - JSON-based observation history
 - Lightweight Flask web interface
+- Multi-language user interface (English / German)
+- Localized bird names
+- Scientific bird names
+- Intelligent fallback to scientific names
+- Background classification suggestions
 - Docker-based deployment
 - No database required
 - Low resource consumption
@@ -68,6 +73,14 @@ Flask Web Interface
 ---
 
 ## Quick Start
+
+Configurable options include:
+
+- Camera URL
+- CoralAPI endpoint
+- Detection threshold
+- Retention settings
+- Interface language (`LANGUAGE=de|en`)
 
 Clone the repository:
 
@@ -129,6 +142,7 @@ Goals:
 - Easy to maintain
 - Few dependencies
 - No database requirement
+- Human-readable JSON data
 
 The project replaces a significantly more complex setup consisting of:
 
@@ -143,17 +157,20 @@ while keeping the functionality required for bird feeder monitoring.
 
 ## Roadmap
 
-### Version 2
+### Observation Management
 
-Planned improvements:
-
-- German bird names
 - Configurable retention policy
 - Default retention of 90 days
 - Delete observations from the web interface
 - Delete all observations from the web interface
+
+### Analytics
+
 - Observation statistics
 - Storage usage information
+
+### User Interface
+
 - Enhanced gallery view
 
 ---
