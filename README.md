@@ -16,6 +16,15 @@ The project follows a strong KISS (Keep It Simple, Stupid) philosophy and was cr
 
 ---
 
+## Birdfeeder Web Interface
+
+A lightweight local web interface showing detected birds, confidence scores, translated species names and cropped observations.
+
+<p align="center">
+  <img src="screenshots/gallery.png
+
+---
+
 ## Features
 
 - RTSP camera integration
