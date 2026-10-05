@@ -5,3 +5,4 @@
 __pycache__/
 *.pyc
 *.before-*
+import_test_images.py
