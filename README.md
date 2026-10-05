@@ -205,3 +205,26 @@ of the GPL.
 See the LICENSE file for details.
 
 ---
+
+## Demo Images and Testing
+
+The web interface screenshot shown in this repository was generated using publicly available bird photographs from Pexels.
+
+The same images were also used during development and testing of Birdfeeder's species classification and user interface.
+
+Photographers credited:
+
+- cosy1337
+- dkomov
+- Ganajp
+- Hemant Goyal
+- Lichtblick800
+- Olympus
+- Valentin
+
+Many thanks to the photographers for providing freely usable reference images that helped with Birdfeeder testing, validation and documentation.
+
+Photo licensing and attribution information can be found on Pexels:
+https://www.pexels.com/license/
+
+---
