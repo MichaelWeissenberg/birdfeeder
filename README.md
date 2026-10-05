@@ -20,8 +20,7 @@ The project follows a strong KISS (Keep It Simple, Stupid) philosophy and was cr
 
 A lightweight local web interface showing detected birds, confidence scores, translated species names and cropped observations.
 
-<p align="center">
-  <img src="screenshots/gallery.png
+!screenshots/gallery.png
 
 ---
 
