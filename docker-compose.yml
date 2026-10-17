@@ -35,3 +35,21 @@ services:
       - "8080:8080"
 
     restart: unless-stopped
+
+  birdfeeder-retention:
+    image: birdfeeder:local
+    container_name: birdfeeder-retention
+
+    command:
+      - python
+      - /app/retention.py
+      - --delete
+      - --loop
+
+    env_file:
+      - .env
+
+    volumes:
+      - /srv/birdfeeder:/data
+
+    restart: unless-stopped

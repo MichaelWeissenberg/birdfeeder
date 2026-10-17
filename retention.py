@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,56 @@ RETENTION_REJECTED_DAYS = int(
     os.getenv("RETENTION_REJECTED_DAYS", "30")
 )
 
+RETENTION_INTERVAL_DAYS = float(
+    os.getenv(
+        "RETENTION_INTERVAL_DAYS",
+        "1",
+    )
+)
+
+if RETENTION_INTERVAL_DAYS <= 0:
+    raise RuntimeError(
+        "RETENTION_INTERVAL_DAYS must be greater than 0"
+    )
+
+RETENTION_INTERVAL_SECONDS = (
+    RETENTION_INTERVAL_DAYS
+    * 24
+    * 60
+    * 60
+)
+
+def run_loop() -> None:
+    print(
+        "Birdfeeder retention service started"
+    )
+
+    print(
+        "Retention interval: "
+        f"{RETENTION_INTERVAL_DAYS:g} day(s)"
+    )
+
+    while True:
+        try:
+            run_retention(
+                dry_run=False
+            )
+        except Exception as exc:
+            print(
+                "Retention run failed: "
+                f"{type(exc).__name__}: {exc}",
+                flush=True,
+            )
+
+        print(
+            "Next retention run in "
+            f"{RETENTION_INTERVAL_DAYS:g} day(s)",
+            flush=True,
+        )
+
+        time.sleep(
+            RETENTION_INTERVAL_SECONDS
+        )
 
 def load_record(json_path: Path) -> dict[str, Any] | None:
     try:
@@ -205,8 +256,23 @@ if __name__ == "__main__":
         help="Abgelaufene Datensätze tatsächlich löschen",
     )
 
+    parser.add_argument(
+        "--loop",
+        action="store_true",
+        help="Retention dauerhaft im Intervall ausführen",
+    )
+
     args = parser.parse_args()
 
-    run_retention(
-        dry_run=not args.delete
-    )
+    if args.loop:
+        if not args.delete:
+            parser.error(
+                "--loop requires --delete"
+            )
+
+        run_loop()
+
+    else:
+        run_retention(
+            dry_run=not args.delete
+        )
