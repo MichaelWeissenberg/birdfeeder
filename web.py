@@ -815,7 +815,7 @@ PAGE_TEMPLATE = """
 
 
 DETAIL_TEMPLATE = """
-!doctype html>
+<!doctype html>
 <html lang="{{ language }}">
 <head>
     <meta charset="utf-8">
