@@ -14,6 +14,173 @@ from pathlib import Path
 import requests
 from PIL import Image
 
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class CameraConfig:
+    name: str
+    label: str
+    url: str
+    enabled: bool
+
+
+def parse_env_bool(
+    value: str,
+    *,
+    variable_name: str,
+) -> bool:
+    normalized = value.strip().lower()
+
+    if normalized in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return True
+
+    if normalized in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }:
+        return False
+
+    raise RuntimeError(
+        f"{variable_name} must be true or false"
+    )
+
+
+def normalize_camera_name(
+    value: str,
+) -> str:
+    camera_name = "".join(
+        character
+        if character.isalnum()
+        or character in {"-", "_"}
+        else "-"
+        for character in value.strip().lower()
+    ).strip("-_")
+
+    if not camera_name:
+        raise RuntimeError(
+            "Camera name must not be empty"
+        )
+
+    return camera_name
+
+
+def load_cameras() -> list[CameraConfig]:
+    try:
+        camera_count = int(
+            os.getenv(
+                "CAMERA_COUNT",
+                "0",
+            )
+        )
+    except ValueError as exc:
+        raise RuntimeError(
+            "CAMERA_COUNT must be an integer"
+        ) from exc
+
+    if camera_count < 1:
+        raise RuntimeError(
+            "CAMERA_COUNT must be at least 1"
+        )
+
+    cameras = []
+
+    for number in range(
+        1,
+        camera_count + 1,
+    ):
+        prefix = f"CAMERA_{number}"
+
+        name_variable = f"{prefix}_NAME"
+        label_variable = f"{prefix}_LABEL"
+        url_variable = f"{prefix}_URL"
+        enabled_variable = f"{prefix}_ENABLED"
+
+        name = normalize_camera_name(
+            os.getenv(
+                name_variable,
+                f"camera_{number}",
+            )
+        )
+
+        label = os.getenv(
+            label_variable,
+            name,
+        ).strip() or name
+
+        url = os.getenv(
+            url_variable,
+            "",
+        ).strip()
+
+        enabled = parse_env_bool(
+            os.getenv(
+                enabled_variable,
+                "true",
+            ),
+            variable_name=enabled_variable,
+        )
+
+        if enabled and not url:
+            raise RuntimeError(
+                f"{url_variable} must be configured "
+                f"for enabled camera {name}"
+            )
+
+        cameras.append(
+            CameraConfig(
+                name=name,
+                label=label,
+                url=url,
+                enabled=enabled,
+            )
+        )
+
+    names = [
+        camera.name
+        for camera in cameras
+    ]
+
+    if len(names) != len(set(names)):
+        raise RuntimeError(
+            "Camera names must be unique"
+        )
+
+    if not any(
+        camera.enabled
+        for camera in cameras
+    ):
+        raise RuntimeError(
+            "At least one camera must be enabled"
+        )
+
+    return cameras
+
+CAMERAS = load_cameras()
+
+ENABLED_CAMERAS = [
+    camera
+    for camera in CAMERAS
+    if camera.enabled
+]
+
+if len(ENABLED_CAMERAS) > 1:
+    raise RuntimeError(
+        "Multiple enabled cameras are configured, "
+        "but multi-camera runtime is not enabled yet"
+    )
+
+ACTIVE_CAMERA = ENABLED_CAMERAS[0]
+
+CAMERA_NAME = ACTIVE_CAMERA.name
+CAMERA_URL = ACTIVE_CAMERA.url
 
 RUN_ONCE = os.getenv("RUN_ONCE", "true").strip().lower() in {
     "1",
@@ -21,8 +188,6 @@ RUN_ONCE = os.getenv("RUN_ONCE", "true").strip().lower() in {
     "yes",
     "on",
 }
-
-
 
 try:
     INTERVAL_SECONDS = float(
@@ -37,23 +202,6 @@ if INTERVAL_SECONDS <= 0:
     raise RuntimeError(
         "INTERVAL_SECONDS muss größer als 0 sein"
     )
-
-CAMERA_URL = os.environ["CAMERA_URL"]
-
-CAMERA_NAME = os.getenv(
-    "CAMERA_NAME",
-    "camera",
-).strip().lower()
-
-CAMERA_NAME = "".join(
-    character
-    if character.isalnum() or character in {"-", "_"}
-    else "-"
-    for character in CAMERA_NAME
-).strip("-_")
-
-if not CAMERA_NAME:
-    raise RuntimeError("CAMERA_NAME darf nicht leer sein")
 
 CORAL_API_URL = os.getenv(
     "CORAL_API_URL",
@@ -90,22 +238,6 @@ DETECTOR_MODEL = (
 )
 CLASSIFIER_MODEL = (
     "mobilenet_v2_1.0_224_inat_bird_quant_edgetpu"
-)
-
-RETENTION_ACCEPTED_DAYS = int(
-    os.getenv("RETENTION_ACCEPTED_DAYS", "365")
-)
-
-RETENTION_REJECTED_DAYS = int(
-    os.getenv("RETENTION_REJECTED_DAYS", "30")
-)
-
-RETENTION_SNAPSHOTS_DAYS = int(
-    os.getenv("RETENTION_SNAPSHOTS_DAYS", "14")
-)
-
-RETENTION_CROP_DAYS = int(
-    os.getenv("RETENTION_CROP_DAYS", "30")
 )
 
 
@@ -232,17 +364,6 @@ def cleanup_directory(
                 f"Retention: gelöscht {file}",
                 flush=True,
             )
-
-def run_retention() -> None:
-    print("Starte Retention ...", flush=True)
-
-    print(
-        f"accepted={RETENTION_ACCEPTED_DAYS}d "
-        f"rejected={RETENTION_REJECTED_DAYS}d "
-        f"snapshots={RETENTION_SNAPSHOTS_DAYS}d "
-        f"crops={RETENTION_CROP_DAYS}d",
-        flush=True,
-    )
 
 
 def create_snapshot(target: Path) -> None:
@@ -567,7 +688,30 @@ def run_once() -> int:
 
 def main() -> int:
     initialize_storage()
-    run_retention()
+
+    print(
+        "Configured cameras: "
+        + ", ".join(
+            camera.name
+            for camera in CAMERAS
+        ),
+        flush=True,
+    )
+
+    print(
+        "Enabled cameras: "
+        + ", ".join(
+            camera.name
+            for camera in ENABLED_CAMERAS
+        ),
+        flush=True,
+    )
+
+    print(
+        "Pipeline camera: "
+        f"{ACTIVE_CAMERA.name}",
+        flush=True,
+    )
 
     if RUN_ONCE:
         return run_once()
