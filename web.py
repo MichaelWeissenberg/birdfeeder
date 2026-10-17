@@ -1,8 +1,19 @@
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, abort, render_template_string, send_file
+from flask import (
+    Flask,
+    abort,
+    redirect,
+    render_template_string,
+    request,
+    send_file,
+    url_for,
+)
+
+from stats import build_stats
 
 LANGUAGE = os.getenv(
     "LANGUAGE",
@@ -76,6 +87,121 @@ WEB_PORT = int(
 
 app = Flask(__name__)
 
+def resolve_data_path(path_value: str) -> Path:
+    path = (DATA_DIR / path_value).resolve()
+
+    try:
+        path.relative_to(DATA_DIR)
+    except ValueError as exc:
+        raise ValueError(
+            f"Pfad liegt außerhalb von DATA_DIR: {path_value}"
+        ) from exc
+
+    return path
+
+def find_observation_file(
+    event_id: str,
+) -> Path | None:
+    if not event_id:
+        return None
+
+    accepted_file = (
+        DATA_DIR
+        / "accepted"
+        / "json"
+        / f"{event_id}.json"
+    )
+
+    rejected_file = (
+        DATA_DIR
+        / "rejected"
+        / "json"
+        / f"{event_id}.json"
+    )
+
+    for json_path in (
+        accepted_file,
+        rejected_file,
+    ):
+        if json_path.is_file():
+            return json_path
+
+    return None
+
+def load_observation(
+    event_id: str,
+) -> tuple[dict, Path] | None:
+    json_path = find_observation_file(event_id)
+
+    if json_path is None:
+        return None
+
+    try:
+        record = json.loads(
+            json_path.read_text(
+                encoding="utf-8",
+            )
+        )
+    except (
+        OSError,
+        json.JSONDecodeError,
+    ):
+        return None
+
+    if not isinstance(record, dict):
+        return None
+
+    if record.get("schema_version") != 1:
+        return None
+
+    if record.get("event_id") != event_id:
+        return None
+
+    return record, json_path
+
+def delete_observation(
+    event_id: str,
+) -> bool:
+    loaded = load_observation(event_id)
+
+    if loaded is None:
+        return False
+
+    record, json_path = loaded
+
+    referenced_paths = []
+
+    for field_name in (
+        "snapshot",
+        "crop",
+    ):
+        path_value = record.get(field_name)
+
+        if not isinstance(path_value, str):
+            continue
+
+        try:
+            referenced_path = resolve_data_path(
+                path_value
+            )
+        except ValueError:
+            continue
+
+        referenced_paths.append(
+            referenced_path
+        )
+
+    for referenced_path in referenced_paths:
+        referenced_path.unlink(
+            missing_ok=True
+        )
+
+    # Metadaten bewusst zuletzt löschen.
+    json_path.unlink(
+        missing_ok=True
+    )
+
+    return True
 
 PAGE_TEMPLATE = """
 <!doctype html>
@@ -152,6 +278,80 @@ PAGE_TEMPLATE = """
             border: 1px solid var(--border);
             border-radius: 1rem;
             background: var(--green-light);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            background: var(--card);
+            box-shadow: 0 8px 24px rgb(0 0 0 / 5%);
+        }
+
+        .stat-value {
+            margin: 0;
+            color: var(--green);
+            font-size: 2rem;
+            font-weight: 800;
+        }
+
+        .stat-label {
+            margin: 0.25rem 0 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .section-title {
+            margin: 2rem 0 1rem;
+            font-size: 1.35rem;
+        }
+
+        .camera-grid {
+            display: grid;
+            grid-template-columns: repeat(
+                auto-fit,
+                minmax(240px, 1fr)
+            );
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .camera-card {
+            padding: 1rem 1.25rem;
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            background: var(--card);
+        }
+
+        .camera-name {
+            margin: 0 0 0.5rem;
+            font-weight: 700;
+        }
+
+        .camera-stats {
+            margin: 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 800px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .grid {
@@ -250,6 +450,84 @@ PAGE_TEMPLATE = """
             color: var(--muted);
             font-size: 0.85rem;
         }
+
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: end;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            padding: 1rem 1.25rem;
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            background: var(--card);
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .filter-label {
+            color: var(--muted);
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .filter-button,
+        .pagination-button {
+            display: inline-block;
+            padding: 0.6rem 0.9rem;
+            border: 1px solid var(--border);
+            border-radius: 0.7rem;
+            background: var(--card);
+            color: var(--text);
+            text-decoration: none;
+        }
+
+        .filter-button:hover,
+        .pagination-button:hover {
+            border-color: var(--green);
+        }
+
+        .filter-button.active {
+            border-color: var(--green);
+            background: var(--green);
+            color: white;
+        }
+
+        .filter-select {
+            min-width: 180px;
+            padding: 0.6rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 0.7rem;
+            background: var(--card);
+            color: var(--text);
+        }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .pagination-info {
+            color: var(--muted);
+        }
+
+        .pagination-button.disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
     </style>
 </head>
 
@@ -263,6 +541,151 @@ PAGE_TEMPLATE = """
         <div class="status">
             {{ result_count }} {{ ui_text.status_results }}
             {{ ui_text.status_autorefresh }}
+        </div>
+
+        <section class="stats-grid">
+            <div class="stat-card">
+                <p class="stat-value">
+                    {{ statistics.total }}
+                </p>
+                <p class="stat-label">
+                    {{ ui_text.dashboard_total }}
+                </p>
+            </div>
+
+            <div class="stat-card">
+                <p class="stat-value">
+                    {{ statistics.accepted }}
+                </p>
+                <p class="stat-label">
+                    {{ ui_text.dashboard_accepted }}
+                </p>
+            </div>
+
+            <div class="stat-card">
+                <p class="stat-value">
+                    {{ statistics.rejected }}
+                </p>
+                <p class="stat-label">
+                    {{ ui_text.dashboard_rejected }}
+                </p>
+            </div>
+
+            <div class="stat-card">
+                <p class="stat-value">
+                    {{ statistics.acceptance_rate }} %
+                </p>
+                <p class="stat-label">
+                    {{ ui_text.dashboard_acceptance_rate }}
+                </p>
+            </div>
+        </section>
+
+
+        {% if statistics.cameras %}
+            <h2 class="section-title">
+                {{ ui_text.dashboard_cameras }}
+            </h2>
+
+            <section class="camera-grid">
+                {% for camera, values in statistics.cameras.items() %}
+                    <div class="camera-card">
+                        <p class="camera-name">
+                            {{ camera }}
+                        </p>
+
+                        <p class="camera-stats">
+                            {{ values.total }}
+                            {{ ui_text.dashboard_camera_total }}
+                            <br>
+
+                            {{ values.accepted }}
+                            {{ ui_text.dashboard_camera_accepted }}
+                            ·
+                            {{ values.rejected }}
+                            {{ ui_text.dashboard_camera_rejected }}
+                            <br>
+
+                            {{ ui_text.dashboard_acceptance_rate }}:
+                            {{ values.acceptance_rate }} %
+                        </p>
+                    </div>
+                {% endfor %}
+            </section>
+        {% endif %}
+
+        <h2 class="section-title">
+            {{ ui_text.dashboard_latest }}
+        </h2>
+
+        <div class="filters">
+
+            <div class="filter-group">
+                <span class="filter-label">
+                    {{ ui_text.filter_status }}
+                </span>
+
+                <div class="filter-buttons">
+                    <a
+                        class="filter-button{% if status == 'all' %} active{% endif %}"
+                        href="{{ url_for('index', status='all', camera=camera, page=1) }}"
+                    >
+                        {{ ui_text.filter_all }}
+                    </a>
+
+                    <a
+                        class="filter-button{% if status == 'accepted' %} active{% endif %}"
+                        href="{{ url_for('index', status='accepted', camera=camera, page=1) }}"
+                    >
+                        {{ ui_text.filter_accepted }}
+                    </a>
+
+                    <a
+                        class="filter-button{% if status == 'rejected' %} active{% endif %}"
+                        href="{{ url_for('index', status='rejected', camera=camera, page=1) }}"
+                    >
+                        {{ ui_text.filter_rejected }}
+                    </a>
+                </div>
+
+            </div>
+
+            <div class="filter-group">
+                <label
+                    class="filter-label"
+                    for="camera-filter"
+                >
+                    {{ ui_text.filter_camera }}
+                </label>
+
+                <select
+                    id="camera-filter"
+                    class="filter-select"
+                    onchange="
+                        window.location.href =
+                            '?status={{ status }}&camera='
+                            + encodeURIComponent(this.value)
+                            + '&page=1';
+                    "
+                >
+                    <option
+                        value="all"
+                        {% if camera == 'all' %}selected{% endif %}
+                    >
+                        {{ ui_text.filter_all_cameras }}
+                    </option>
+
+                    {% for camera_name in statistics.cameras %}
+                        <option
+                            value="{{ camera_name }}"
+                            {% if camera == camera_name %}selected{% endif %}
+                        >
+                            {{ camera_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
         </div>
 
         {% if observations %}
@@ -341,6 +764,44 @@ PAGE_TEMPLATE = """
                 </p>
             </div>
         {% endif %}
+
+        {% if total_pages > 1 %}
+            <nav class="pagination">
+                {% if page > 1 %}
+                    <a
+                        class="pagination-button"
+                        href="{{ url_for('index', status=status, camera=camera, page=page - 1) }}"
+                    >
+                        &larr; {{ ui_text.pagination_previous }}
+                    </a>
+                {% else %}
+                    <span class="pagination-button disabled">
+                        &larr; {{ ui_text.pagination_previous }}
+                    </span>
+                {% endif %}
+
+                <span class="pagination-info">
+                    {{ ui_text.pagination_page }}
+                    {{ page }}
+                    {{ ui_text.pagination_of }}
+                    {{ total_pages }}
+                </span>
+
+                {% if page < total_pages %}
+                    <a
+                        class="pagination-button"
+                        href="{{ url_for('index', status=status, camera=camera, page=page + 1) }}"
+                    >
+                        {{ ui_text.pagination_next }} &rarr;
+                    </a>
+                {% else %}
+                    <span class="pagination-button disabled">
+                        {{ ui_text.pagination_next }} &rarr;
+                    </span>
+                {% endif %}
+            </nav>
+        {% endif %}
+
     </main>
 
     <footer>
@@ -356,168 +817,263 @@ def safe_media_url(path_value: str | None) -> str | None:
         return None
 
     try:
-        path = Path(path_value).resolve()
+        path = (DATA_DIR / path_value).resolve()
         relative_path = path.relative_to(DATA_DIR)
     except (OSError, ValueError):
         return None
 
     return f"/media/{relative_path.as_posix()}"
 
-
 def format_timestamp(timestamp: str) -> str:
-    if len(timestamp) != 15:
-        return timestamp
-
     try:
-        return (
-            f"{timestamp[6:8]}.{timestamp[4:6]}.{timestamp[0:4]}"
-            f" um {timestamp[9:11]}:{timestamp[11:13]} Uhr"
-        )
-    except IndexError:
+        dt = datetime.fromisoformat(timestamp)
+    except (TypeError, ValueError):
         return timestamp
 
+    return dt.strftime(ui_text["datetime_format"])
 
-def read_observations(limit: int = 30) -> tuple[list[dict], int]:
+def read_observations(
+    page: int = 1,
+    per_page: int = 24,
+    status: str = "all",
+    camera: str = "all",
+):
     result_files = sorted(
-        DATA_DIR.glob("*.json"),
+        list(
+            (DATA_DIR / "accepted" / "json").glob("*.json")
+        )
+        + list(
+            (DATA_DIR / "rejected" / "json").glob("*.json")
+        ),
         reverse=True,
     )
 
-    observations: list[dict] = []
+    observations = []
 
     for result_file in result_files:
         try:
-            records = json.loads(
-                result_file.read_text(
-                    encoding="utf-8",
-                )
+            record = json.loads(
+                result_file.read_text(encoding="utf-8")
             )
-        except (
-            OSError,
-            json.JSONDecodeError,
-        ):
+        except (OSError, json.JSONDecodeError):
             continue
 
-        if not isinstance(records, list):
+        if not isinstance(record, dict):
             continue
 
-        for record in records:
-            classifications = record.get(
-                "classifications",
-                [],
+        if record.get("schema_version") != 1:
+            continue
+
+        # Status filtern
+        accepted = bool(record.get("accepted", False))
+
+        if status == "accepted" and not accepted:
+            continue
+
+        if status == "rejected" and accepted:
+            continue
+
+        # Kamera filtern
+        record_camera = record.get("camera", "unknown")
+
+        if camera != "all" and record_camera != camera:
+            continue
+
+        classifications = record.get(
+            "classifications",
+            [],
+        )
+
+        top_result = (
+            classifications[0]
+            if classifications
+            else {}
+        )
+
+        original_label = top_result.get(
+            "label",
+            "background",
+        )
+
+        score = float(
+            top_result.get(
+                "score",
+                0,
+            )
+        )
+
+        possible_match = None
+        possible_match_scientific_name = None
+        possible_match_score = None
+
+        if original_label == "background":
+            label = ui_text["unknown_species"]
+            scientific_name = None
+
+            best_species_result = next(
+                (
+                    classification
+                    for classification in classifications
+                    if classification.get("label")
+                    != "background"
+                ),
+                None,
             )
 
-            top_result = (
-                classifications[0]
-                if classifications
-                else {}
-            )
-
-            original_label = top_result.get(
-                "label",
-                "background",
-            )
-
-            score = float(
-                top_result.get(
-                    "score",
-                    0,
-                )
-            )
-
-            possible_match = None
-            possible_match_scientific_name = None
-            possible_match_score = None
-
-            if original_label == "background":
-                label = ui_text["unknown_species"]
-                scientific_name = None
-
-                best_species_result = next(
-                    (
-                        classification
-                        for classification in classifications
-                        if classification.get("label") != "background"
-                    ),
-                    None,
-                )
-
-                if best_species_result:
-                    possible_match_original_label = (
-                        best_species_result.get(
-                            "label",
-                            "",
-                        )
+            if best_species_result:
+                possible_match_original_label = (
+                    best_species_result.get(
+                        "label",
+                        "",
                     )
+                )
 
-                    possible_match_scientific_name = (
-                        extract_scientific_name(
-                            possible_match_original_label
-                        )
-                    )
-
-                    possible_match = translate_bird_name(
+                possible_match_scientific_name = (
+                    extract_scientific_name(
                         possible_match_original_label
                     )
-
-                    possible_match_score = (
-                        f"{float(best_species_result.get('score', 0)):.1%}"
-                    )
-            else:
-                scientific_name = extract_scientific_name(
-                    original_label
                 )
 
-                label = translate_bird_name(
-                    original_label
+                possible_match = translate_bird_name(
+                    possible_match_original_label
                 )
 
-            observations.append(
-                {
-                    "timestamp": format_timestamp(
-                        record.get(
-                            "timestamp",
-                            result_file.stem,
-                        )
-                    ),
-                    "accepted": bool(
-                        record.get(
-                            "accepted",
-                            False,
-                        )
-                    ),
-                    "label": label,
-                    "scientific_name": scientific_name,
-                    "score": f"{score:.1%}",
-                    "possible_match": possible_match,
-                    "possible_match_scientific_name": (
-                        possible_match_scientific_name
-                        ),
-                    "possible_match_score": possible_match_score,
-                    "image": safe_media_url(
-                        record.get("crop")
-                    ),
-                }
+                possible_match_score = (
+                    f"{float(best_species_result.get('score', 0)):.1%}"
+                )
+
+        else:
+            scientific_name = extract_scientific_name(
+                original_label
             )
 
-            if len(observations) >= limit:
-                return observations, len(result_files)
+            label = translate_bird_name(
+                original_label
+            )
 
-    return observations, len(result_files)
+        observations.append(
+            {
+                "event_id": record.get("event_id"),
+                "camera": record_camera,
+                "timestamp": format_timestamp(
+                    record.get("timestamp", "")
+                ),
+                "accepted": accepted,
+                "label": label,
+                "scientific_name": scientific_name,
+                "score": f"{score:.1%}",
+                "possible_match": possible_match,
+                "possible_match_scientific_name": (
+                    possible_match_scientific_name
+                ),
+                "possible_match_score": (
+                    possible_match_score
+                ),
+                "image": safe_media_url(
+                    record.get("crop")
+                ),
+            }
+        )
 
+    # Wichtig: erst nach der Filterung zählen
+    total = len(observations)
+
+    # Ungültige Werte abfangen
+    page = max(page, 1)
+    per_page = max(per_page, 1)
+
+    total_pages = max(
+        1,
+        (total + per_page - 1) // per_page,
+    )
+
+    # Seite oberhalb der letzten Seite abfangen
+    page = min(page, total_pages)
+
+    start = (page - 1) * per_page
+    end = start + per_page
+
+    observations = observations[start:end]
+
+    return observations, total, total_pages, page
 
 @app.get("/")
 def index() -> str:
-    observations, result_count = read_observations()
+    page = request.args.get(
+        "page",
+        1,
+        type=int,
+    )
+
+    status = request.args.get(
+        "status",
+        "all",
+    )
+
+    camera = request.args.get(
+        "camera",
+        "all",
+    )
+
+    observations, result_count, total_pages, page = (
+        read_observations(
+            page=page,
+            per_page=24,
+            status=status,
+            camera=camera,
+        )
+    )
+
+    statistics = build_stats()
 
     return render_template_string(
         PAGE_TEMPLATE,
         observations=observations,
         result_count=result_count,
+        statistics=statistics,
+        page=page,
+        total_pages=total_pages,
+        status=status,
+        camera=camera,
         language=LANGUAGE,
-        ui_text=ui_text
+        ui_text=ui_text,
     )
 
+@app.post("/observations/<event_id>/delete")
+def delete_observation_route(
+    event_id: str,
+):
+    deleted = delete_observation(
+        event_id
+    )
+
+    if not deleted:
+        abort(404)
+
+    status = request.form.get(
+        "status",
+        "all",
+    )
+
+    camera = request.form.get(
+        "camera",
+        "all",
+    )
+
+    page = request.form.get(
+        "page",
+        1,
+        type=int,
+    )
+
+    return redirect(
+        url_for(
+            "index",
+            status=status,
+            camera=camera,
+            page=max(page, 1),
+        )
+    )
 
 @app.get("/health")
 def health() -> dict:

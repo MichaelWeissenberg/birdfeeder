@@ -16,6 +16,8 @@ WORKDIR /app
 COPY app.py /app/app.py
 COPY benchmark_species.py /app/benchmark_species.py
 COPY web.py /app/web.py
+COPY stats.py /app/stats.py
+COPY retention.py /app/retention.py
 COPY translations /app/translations
 
 CMD ["python", "/app/app.py"]

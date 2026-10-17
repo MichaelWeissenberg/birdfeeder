@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import signal
@@ -37,8 +38,23 @@ if INTERVAL_SECONDS <= 0:
         "INTERVAL_SECONDS muss größer als 0 sein"
     )
 
-
 CAMERA_URL = os.environ["CAMERA_URL"]
+
+CAMERA_NAME = os.getenv(
+    "CAMERA_NAME",
+    "camera",
+).strip().lower()
+
+CAMERA_NAME = "".join(
+    character
+    if character.isalnum() or character in {"-", "_"}
+    else "-"
+    for character in CAMERA_NAME
+).strip("-_")
+
+if not CAMERA_NAME:
+    raise RuntimeError("CAMERA_NAME darf nicht leer sein")
+
 CORAL_API_URL = os.getenv(
     "CORAL_API_URL",
     "http://127.0.0.1:8001",
@@ -55,8 +71,19 @@ CLASSIFICATION_MARGIN = float(
 )
 
 DATA_DIR = Path("/data")
-SNAPSHOT_DIR = DATA_DIR / "snapshots"
-CROP_DIR = DATA_DIR / "crops"
+
+WORKING_DIR = DATA_DIR / "working"
+
+ACCEPTED_DIR = DATA_DIR / "accepted"
+REJECTED_DIR = DATA_DIR / "rejected"
+
+ACCEPTED_SNAPSHOT_DIR = ACCEPTED_DIR / "snapshots"
+ACCEPTED_CROP_DIR = ACCEPTED_DIR / "crops"
+ACCEPTED_JSON_DIR = ACCEPTED_DIR / "json"
+
+REJECTED_SNAPSHOT_DIR = REJECTED_DIR / "snapshots"
+REJECTED_CROP_DIR = REJECTED_DIR / "crops"
+REJECTED_JSON_DIR = REJECTED_DIR / "json"
 
 DETECTOR_MODEL = (
     "ssd_mobilenet_v2_coco_quant_postprocess_edgetpu"
@@ -64,6 +91,158 @@ DETECTOR_MODEL = (
 CLASSIFIER_MODEL = (
     "mobilenet_v2_1.0_224_inat_bird_quant_edgetpu"
 )
+
+RETENTION_ACCEPTED_DAYS = int(
+    os.getenv("RETENTION_ACCEPTED_DAYS", "365")
+)
+
+RETENTION_REJECTED_DAYS = int(
+    os.getenv("RETENTION_REJECTED_DAYS", "30")
+)
+
+RETENTION_SNAPSHOTS_DAYS = int(
+    os.getenv("RETENTION_SNAPSHOTS_DAYS", "14")
+)
+
+RETENTION_CROP_DAYS = int(
+    os.getenv("RETENTION_CROP_DAYS", "30")
+)
+
+
+def initialize_storage() -> None:
+    directories = [
+        WORKING_DIR,
+        ACCEPTED_SNAPSHOT_DIR,
+        ACCEPTED_CROP_DIR,
+        ACCEPTED_JSON_DIR,
+        REJECTED_SNAPSHOT_DIR,
+        REJECTED_CROP_DIR,
+        REJECTED_JSON_DIR,
+    ]
+
+    for directory in directories:
+        directory.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+def get_storage_directories(
+    accepted: bool,
+) -> tuple[Path, Path, Path]:
+    if accepted:
+        return (
+            ACCEPTED_SNAPSHOT_DIR,
+            ACCEPTED_CROP_DIR,
+            ACCEPTED_JSON_DIR,
+        )
+
+    return (
+        REJECTED_SNAPSHOT_DIR,
+        REJECTED_CROP_DIR,
+        REJECTED_JSON_DIR,
+    )
+
+
+def relative_data_path(path: Path) -> str:
+    return str(path.relative_to(DATA_DIR))
+
+
+def store_detection(
+    *,
+    event_id: str,
+    snapshot_source: Path,
+    crop_source: Path,
+    record: dict,
+    accepted: bool,
+) -> Path:
+    (
+        snapshot_directory,
+        crop_directory,
+        json_directory,
+    ) = get_storage_directories(accepted)
+
+    snapshot_target = (
+        snapshot_directory /
+        f"{event_id}-full.jpg"
+    )
+    crop_target = (
+        crop_directory /
+        f"{event_id}-bird.jpg"
+    )
+    json_target = (
+        json_directory /
+        f"{event_id}.json"
+    )
+
+    shutil.copy2(
+        snapshot_source,
+        snapshot_target,
+    )
+    shutil.move(
+        str(crop_source),
+        str(crop_target),
+    )
+
+    record["snapshot"] = relative_data_path(
+        snapshot_target
+    )
+    record["crop"] = relative_data_path(
+        crop_target
+    )
+    record["metadata_file"] = relative_data_path(
+        json_target
+    )
+
+    json_target.write_text(
+        json.dumps(
+            record,
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    return json_target
+
+def cleanup_directory(
+    directory: Path,
+    retention_days: int,
+) -> None:
+
+    if retention_days <= 0:
+        return
+
+    cutoff = (
+        datetime.now()
+        - timedelta(days=retention_days)
+    )
+
+    for file in directory.glob("*"):
+        if not file.is_file():
+            continue
+
+        modified = datetime.fromtimestamp(
+            file.stat().st_mtime
+        )
+
+        if modified < cutoff:
+            file.unlink()
+
+            print(
+                f"Retention: gelöscht {file}",
+                flush=True,
+            )
+
+def run_retention() -> None:
+    print("Starte Retention ...", flush=True)
+
+    print(
+        f"accepted={RETENTION_ACCEPTED_DAYS}d "
+        f"rejected={RETENTION_REJECTED_DAYS}d "
+        f"snapshots={RETENTION_SNAPSHOTS_DAYS}d "
+        f"crops={RETENTION_CROP_DAYS}d",
+        flush=True,
+    )
 
 
 def create_snapshot(target: Path) -> None:
@@ -200,138 +379,196 @@ def request_stop(
 signal.signal(signal.SIGTERM, request_stop)
 signal.signal(signal.SIGINT, request_stop)
 
-
 def run_once() -> int:
-    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
-    CROP_DIR.mkdir(parents=True, exist_ok=True)
+    initialize_storage()
 
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    now = datetime.now()
+    timestamp = now.strftime("%Y%m%d-%H%M%S-%f")
 
-    snapshot_path = (
-        SNAPSHOT_DIR / f"{timestamp}-full.jpg"
+    snapshot_working_path = (
+        WORKING_DIR /
+        f"{timestamp}-{CAMERA_NAME}-full.jpg"
     )
 
-    print("Erzeuge Kamerabild ...", flush=True)
-    create_snapshot(snapshot_path)
-
-    print("Suche Vögel auf der Coral ...", flush=True)
-    birds = detect_birds(snapshot_path)
-
-    if not birds:
-        print("Kein Vogel erkannt.")
-        snapshot_path.unlink(missing_ok=True)
-        return 0
-
     print(
-        f"{len(birds)} Vogel-Treffer erkannt.",
+        f"Erzeuge Kamerabild für {CAMERA_NAME} ...",
         flush=True,
     )
 
-    records: list[dict] = []
+    create_snapshot(snapshot_working_path)
 
-    for number, detection in enumerate(birds, start=1):
-        crop_path = (
-            CROP_DIR /
-            f"{timestamp}-bird-{number}.jpg"
+    try:
+        print(
+            "Suche Vögel auf der Coral ...",
+            flush=True,
         )
 
-        crop_bird(
-            snapshot_path,
-            crop_path,
-            detection["box"],
+        birds = detect_birds(
+            snapshot_working_path
         )
 
-        classifications = classify_bird(crop_path)
+        if not birds:
+            print("Kein Vogel erkannt.")
+            return 0
 
-        top_result = (
-            classifications[0]
-            if classifications
-            else None
+        print(
+            f"{len(birds)} Vogel-Treffer erkannt.",
+            flush=True,
         )
 
-        second_result = (
-            classifications[1]
-            if len(classifications) > 1
-            else None
-        )
-
-        top_score = float(
-            top_result.get("score", 0)
-            if top_result
-            else 0
-        )
-        second_score = float(
-            second_result.get("score", 0)
-            if second_result
-            else 0
-        )
-        score_margin = top_score - second_score
-
-        accepted = bool(
-            top_result
-            and top_result.get("label") != "background"
-            and top_score >= CLASSIFICATION_THRESHOLD
-            and score_margin >= CLASSIFICATION_MARGIN
-        )
-
-        record = {
-            "timestamp": timestamp,
-            "snapshot": str(snapshot_path),
-            "crop": str(crop_path),
-            "detector": detection,
-            "classifications": classifications,
-            "decision": {
-                "top_score": top_score,
-                "second_score": second_score,
-                "margin": score_margin,
-                "required_score": CLASSIFICATION_THRESHOLD,
-                "required_margin": CLASSIFICATION_MARGIN,
-            },
-            "accepted": accepted,
-        }
-
-        records.append(record)
-
-        if not top_result:
-            print(
-                f"Vogel {number}: "
-                "Keine Artenklassifikation verfügbar."
-            )
-        elif accepted:
-            print(
-                f"Vogel {number}:",
-                top_result.get("label"),
-                f"{top_score:.2%}",
-                f"(Abstand {score_margin:.2%})",
-            )
-        else:
-            print(
-                f"Vogel {number}: "
-                "Art nicht sicher bestimmbar."
-            )
-            print(
-                "  Bester Vorschlag:",
-                top_result.get("label"),
-                f"{top_score:.2%}",
-                f"(Abstand {score_margin:.2%})",
+        for number, detection in enumerate(
+            birds,
+            start=1,
+        ):
+            event_id = (
+                f"{timestamp}-{CAMERA_NAME}-bird-{number}"
             )
 
-    result_path = DATA_DIR / f"{timestamp}.json"
+            crop_working_path = (
+                WORKING_DIR /
+                f"{event_id}.jpg"
+            )
 
-    result_path.write_text(
-        json.dumps(
-            records,
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+            crop_bird(
+                snapshot_working_path,
+                crop_working_path,
+                detection["box"],
+            )
 
-    print(f"Ergebnis gespeichert: {result_path}")
-    return 0
+            try:
+                classifications = classify_bird(
+                    crop_working_path
+                )
 
+                top_result = (
+                    classifications[0]
+                    if classifications
+                    else None
+                )
+
+                second_result = (
+                    classifications[1]
+                    if len(classifications) > 1
+                    else None
+                )
+
+                top_score = float(
+                    top_result.get("score", 0)
+                    if top_result
+                    else 0
+                )
+
+                second_score = float(
+                    second_result.get("score", 0)
+                    if second_result
+                    else 0
+                )
+
+                score_margin = (
+                    top_score - second_score
+                )
+
+                accepted = bool(
+                    top_result
+                    and top_result.get("label")
+                    != "background"
+                    and top_score
+                    >= CLASSIFICATION_THRESHOLD
+                    and score_margin
+                    >= CLASSIFICATION_MARGIN
+                )
+
+                record = {
+                    "schema_version": 1,
+                    "event_id": event_id,
+                    "timestamp": now.isoformat(
+                        timespec="microseconds"
+                    ),
+                    "camera": CAMERA_NAME,
+                    "detector": detection,
+                    "classifications": classifications,
+                    "decision": {
+                        "top_score": top_score,
+                        "second_score": second_score,
+                        "margin": score_margin,
+                        "required_score": (
+                            CLASSIFICATION_THRESHOLD
+                        ),
+                        "required_margin": (
+                            CLASSIFICATION_MARGIN
+                        ),
+                    },
+                    "accepted": accepted,
+                }
+
+                result_path = store_detection(
+                    event_id=event_id,
+                    snapshot_source=(
+                        snapshot_working_path
+                    ),
+                    crop_source=crop_working_path,
+                    record=record,
+                    accepted=accepted,
+                )
+
+                status = (
+                    "accepted"
+                    if accepted
+                    else "rejected"
+                )
+
+                print(
+                    f"Vogel {number}: "
+                    f"{status}; gespeichert unter "
+                    f"{result_path}",
+                    flush=True,
+                )
+
+                if not top_result:
+                    print(
+                        f"Vogel {number}: "
+                        "Keine Artenklassifikation "
+                        "verfügbar."
+                    )
+
+                elif accepted:
+                    print(
+                        f"Vogel {number}:",
+                        top_result.get("label"),
+                        f"{top_score:.2%}",
+                        f"(Abstand "
+                        f"{score_margin:.2%})",
+                    )
+
+                else:
+                    print(
+                        f"Vogel {number}: "
+                        "Art nicht sicher bestimmbar."
+                    )
+                    print(
+                        "  Bester Vorschlag:",
+                        top_result.get("label"),
+                        f"{top_score:.2%}",
+                        f"(Abstand "
+                        f"{score_margin:.2%})",
+                    )
+
+            finally:
+                crop_working_path.unlink(
+                    missing_ok=True
+                )
+
+        return 0
+
+    finally:
+        snapshot_working_path.unlink(
+            missing_ok=True
+        )
 
 def main() -> int:
+    initialize_storage()
+    run_retention()
+
     if RUN_ONCE:
         return run_once()
 
