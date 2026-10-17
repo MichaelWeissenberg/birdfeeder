@@ -693,7 +693,9 @@ PAGE_TEMPLATE = """
                 {% for observation in observations %}
                     <article class="card">
                         {% if observation.image %}
-                            <img src="{{ observation.image }}">
+                            <a href="{{ observation.detail_url }}">
+                                <img src="{{ observation.image }}" alt="{{ observation.label }}">
+                            </a>
                         {% endif %}
 
                         <div class="content">
@@ -812,6 +814,567 @@ PAGE_TEMPLATE = """
 """
 
 
+DETAIL_TEMPLATE = """
+!doctype html>
+<html lang="{{ language }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ ui_text.detail_title }} - {{ ui_text.page_title }}</title>
+    <style>
+        :root {
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            --green: #315c45;
+            --green-light: #e9f1ec;
+            --background: #f4f2ec;
+            --card: #ffffff;
+            --text: #26332b;
+            --muted: #6e786f;
+            --border: #dfe4df;
+            --warning: #b87820;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--background);
+            color: var(--text);
+        }
+
+        header {
+            padding: 2.5rem 1.25rem 2rem;
+            text-align: center;
+            background: var(--green);
+            color: white;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: clamp(2rem, 6vw, 3.5rem);
+        }
+
+        header p {
+            margin: 0.75rem 0 0;
+            opacity: .85;
+        }
+
+        main {
+            width: min(1100px, calc(100% - 2rem));
+            margin: 2rem auto 4rem;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1.5rem;
+            color: var(--green);
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .detail-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .detail-header h2 {
+            margin: 0;
+            font-size: 1.8rem;
+        }
+
+        .status-badge {
+            padding: .5rem .75rem;
+            border-radius: 999px;
+            background: var(--green-light);
+            color: var(--green);
+            font-weight: 800;
+        }
+
+        .status-badge.uncertain {
+            background: #fff8ec;
+            color: #8a5a19;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+
+        .panel {
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            background: var(--card);
+            box-shadow: 0 8px 24px rgb(0 0 0 / 5%);
+        }
+
+        .panel h3 {
+            margin: 0;
+            padding: 1rem 1.25rem;
+            font-size: 1rem;
+        }
+
+        .panel img {
+            display: block;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            object-fit: contain;
+            background: #dfe4df;
+        }
+
+        .no-image {
+            padding: 3rem 1.5rem;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1.25rem;
+        }
+
+        .section {
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            background: var(--card);
+        }
+
+        .section h2 {
+            margin: 0 0 1rem;
+            font-size: 1.25rem;
+        }
+
+        .detail-list {
+            display: grid;
+            grid-template-columns: minmax(160px, .4fr) 1fr;
+            gap: .75rem 1rem;
+            margin: 0;
+        }
+
+        .detail-list dt {
+            color: var(--muted);
+        }
+
+        .detail-list dd {
+            margin: 0;
+            word-break: break-word;
+        }
+
+        .decision-list dd {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .classifications {
+            margin-top: 1.25rem;
+        }
+
+        .classification {
+            display: grid;
+            grid-template-columns: 32px 1fr auto;
+            gap: .75rem;
+            padding: .75rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .classification:last-child {
+            border-bottom: 0;
+        }
+
+        .classification-name {
+            font-weight: 700;
+        }
+
+        .scientific {
+            color: var(--muted);
+            font-size: .85rem;
+            font-style: italic;
+        }
+
+        footer {
+            padding: 1.5rem;
+            text-align: center;
+            color: var(--muted);
+            font-size: .85rem;
+        }
+
+
+        .danger-zone {
+            margin-top: 1.25rem;
+            padding: 1.25rem;
+            border: 1px solid #edcaca;
+            border-radius: 1rem;
+            background: #fffafa;
+        }
+
+        .danger-zone h2 {
+            margin: 0 0 0.75rem;
+            color: #a12b2b;
+            font-size: 1.25rem;
+        }
+
+        .danger-zone p {
+            margin: 0 0 1rem;
+            color: var(--muted);
+        }
+
+        .danger-link {
+            display: inline-block;
+            padding: 0.7rem 1rem;
+            border: 1px solid #a12b2b;
+            border-radius: 0.7rem;
+            background: #a12b2b;
+            color: white;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .danger-link:hover {
+            border-color: #7d2020;
+            background: #7d2020;
+        }
+
+        @media (max-width: 750px) {
+            .image-grid, .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+    </style>
+</head>
+
+
+<body>
+    <header>
+        <h1>{{ ui_text.page_title }}</h1>
+        <p>{{ ui_text.page_subtitle }}</p>
+    </header>
+    <main>
+        <a class="back-link" href="{{ url_for('index', status=status, camera=camera, page=page) }}">
+            &larr; {{ ui_text.detail_back }}
+        </a>
+        <div class="detail-header">
+            <h2>{{ ui_text.detail_title }}</h2>
+            <span class="status-badge{% if not observation.accepted %} uncertain{% endif %}">{{ observation.status_label }}</span>
+        </div>
+        <section class="image-grid">
+            <div class="panel">
+                <h3>{{ ui_text.detail_snapshot }}</h3>
+                {% if observation.snapshot %}
+                    <img src="{{ observation.snapshot }}" alt="{{ ui_text.detail_snapshot }}">
+                {% else %}
+                    <div class="no-image">{{ ui_text.detail_no_image }}</div>
+                {% endif %}
+            </div>
+            <div class="panel">
+                <h3>{{ ui_text.detail_crop }}</h3>
+                {% if observation.crop %}
+                    <img src="{{ observation.crop }}" alt="{{ ui_text.detail_crop }}">
+                {% else %}
+                    <div class="no-image">{{ ui_text.detail_no_image }}</div>
+                {% endif %}
+            </div>
+        </section>
+        <section class="info-grid">
+            <div class="section">
+                <h2>{{ ui_text.detail_information }}</h2>
+                <dl class="detail-list">
+                    <dt>{{ ui_text.detail_status }}</dt><dd>{{ observation.status_label }}</dd>
+                    <dt>{{ ui_text.detail_camera }}</dt><dd>{{ observation.camera }}</dd>
+                    <dt>{{ ui_text.detail_timestamp }}</dt><dd>{{ observation.timestamp }}</dd>
+                    <dt>{{ ui_text.detail_event_id }}</dt><dd>{{ observation.event_id }}</dd>
+                </dl>
+            </div>
+            <div class="section">
+                <h2>{{ ui_text.detail_decision }}</h2>
+                <dl class="detail-list decision-list">
+                    <dt>{{ ui_text.detail_detector_score }}</dt><dd>{{ observation.detector_score }}</dd>
+                    <dt>{{ ui_text.detail_top_score }}</dt><dd>{{ observation.top_score }}</dd>
+                    <dt>{{ ui_text.detail_second_score }}</dt><dd>{{ observation.second_score }}</dd>
+                    <dt>{{ ui_text.detail_margin }}</dt><dd>{{ observation.margin }}</dd>
+                    <dt>{{ ui_text.detail_required_score }}</dt><dd>{{ observation.required_score }}</dd>
+                    <dt>{{ ui_text.detail_required_margin }}</dt><dd>{{ observation.required_margin }}</dd>
+                </dl>
+            </div>
+        </section>
+        <section class="section classifications">
+            <h2>{{ ui_text.detail_classifications }}</h2>
+            {% if observation.classifications %}
+                {% for classification in observation.classifications %}
+                    <div class="classification">
+                        <span>{{ loop.index }}</span>
+                        <div>
+                            <div class="classification-name">{{ classification.name }}</div>
+                            {% if classification.scientific_name %}
+                                <div class="scientific">{{ classification.scientific_name }}</div>
+                            {% endif %}
+                        </div>
+                        <strong>{{ classification.score }}</strong>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </section>
+
+        <section class="danger-zone">
+            <h2>
+                {{ ui_text.delete_danger_title }}
+            </h2>
+
+            <p>
+                {{ ui_text.delete_danger_text }}
+            </p>
+
+            <a class="danger-link"
+                href="{{ url_for('confirm_delete_observation',
+                event_id=observation.event_id,
+                status=status,
+                camera=camera,
+                page=page) }}"
+            >
+               {{ ui_text.delete_action }}
+            </a>
+        </section>
+
+    </main>
+    <footer>{{ ui_text.footer }}</footer>
+</body>
+</html>
+"""
+
+DELETE_CONFIRM_TEMPLATE = """
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+    <meta charset="utf-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+    <title>
+        {{ ui_text.delete_confirm_title }}
+        -
+        {{ ui_text.page_title }}
+    </title>
+
+    <style>
+        :root {
+            font-family:
+                Inter,
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
+
+            --green: #315c45;
+            --background: #f4f2ec;
+            --card: #ffffff;
+            --text: #26332b;
+            --muted: #6e786f;
+            --border: #dfe4df;
+            --danger: #a12b2b;
+            --danger-dark: #7d2020;
+            --danger-light: #fff0f0;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--background);
+            color: var(--text);
+        }
+
+        header {
+            padding: 2.5rem 1.25rem 2rem;
+            text-align: center;
+            background: var(--green);
+            color: white;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: clamp(2rem, 6vw, 3.5rem);
+        }
+
+        header p {
+            margin: 0.75rem 0 0;
+            opacity: 0.85;
+        }
+
+        main {
+            width: min(680px, calc(100% - 2rem));
+            margin: 3rem auto 4rem;
+        }
+
+        .confirm-card {
+            padding: 1.5rem;
+            border: 1px solid #edcaca;
+            border-radius: 1rem;
+            background: var(--card);
+            box-shadow: 0 8px 24px rgb(0 0 0 / 5%);
+        }
+
+        .confirm-card h2 {
+            margin: 0 0 1rem;
+            color: var(--danger);
+        }
+
+        .warning {
+            margin: 1rem 0;
+            padding: 1rem;
+            border-left: 4px solid var(--danger);
+            background: var(--danger-light);
+        }
+
+        .metadata {
+            color: var(--muted);
+            line-height: 1.6;
+            word-break: break-word;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 0.7rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 0.7rem;
+            background: var(--card);
+            color: var(--text);
+            font: inherit;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .button:hover {
+            border-color: var(--green);
+        }
+
+        .button-danger {
+            border-color: var(--danger);
+            background: var(--danger);
+            color: white;
+        }
+
+        .button-danger:hover {
+            border-color: var(--danger-dark);
+            background: var(--danger-dark);
+        }
+
+        footer {
+            padding: 1.5rem;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>{{ ui_text.page_title }}</h1>
+        <p>{{ ui_text.page_subtitle }}</p>
+    </header>
+
+    <main>
+        <section class="confirm-card">
+            <h2>
+                {{ ui_text.delete_confirm_title }}
+            </h2>
+
+            <p>
+                {{ ui_text.delete_confirm_text }}
+            </p>
+
+            <div class="warning">
+                {{ ui_text.delete_irreversible }}
+            </div>
+
+            <p class="metadata">
+                {{ ui_text.detail_event_id }}:
+                {{ observation.event_id }}
+                <br>
+
+                {{ ui_text.detail_camera }}:
+                {{ observation.camera }}
+                <br>
+
+                {{ ui_text.detail_timestamp }}:
+                {{ observation.timestamp }}
+            </p>
+
+            <div class="actions">
+                <a
+                    class="button"
+                    href="{{
+                        url_for('observation_detail',
+                        event_id=observation.event_id,
+                        status=status,
+                        camera=camera,
+                        page=page)
+                    }}"
+                >
+                    {{ ui_text.delete_cancel }}
+                </a>
+
+                <form
+                    method="post"
+                    action="{{ url_for('delete_observation_route', event_id=observation.event_id) }}"
+                >
+                    <input
+                        type="hidden"
+                        name="status"
+                        value="{{ status }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="camera"
+                        value="{{ camera }}"
+                    >
+
+                    <input
+                        type="hidden"
+                        name="page"
+                        value="{{ page }}"
+                    >
+
+                    <button
+                        class="button button-danger"
+                        type="submit"
+                    >
+                        {{ ui_text.delete_confirm_action }}
+                    </button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        {{ ui_text.footer }}
+    </footer>
+</body>
+</html>
+"""
+
 def safe_media_url(path_value: str | None) -> str | None:
     if not path_value:
         return None
@@ -831,6 +1394,97 @@ def format_timestamp(timestamp: str) -> str:
         return timestamp
 
     return dt.strftime(ui_text["datetime_format"])
+
+def format_percentage(value: object) -> str:
+    try:
+        return f"{float(value):.1%}"
+    except (TypeError, ValueError):
+        return "–"
+
+def build_observation_detail(
+    record: dict,
+) -> dict:
+    detector = record.get("detector", {})
+    decision = record.get("decision", {})
+    classifications = record.get(
+        "classifications",
+        [],
+    )
+
+    formatted_classifications = []
+
+    for classification in classifications:
+        original_label = classification.get(
+            "label",
+            "",
+        )
+
+        if original_label == "background":
+            display_name = ui_text["unknown_species"]
+            scientific_name = None
+        else:
+            display_name = translate_bird_name(
+                original_label
+            )
+            scientific_name = extract_scientific_name(
+                original_label
+            )
+
+        formatted_classifications.append(
+            {
+                "name": display_name,
+                "scientific_name": scientific_name,
+                "score": format_percentage(
+                    classification.get("score", 0)
+                ),
+            }
+        )
+
+    accepted = bool(
+        record.get("accepted", False)
+    )
+
+    return {
+        "event_id": record.get("event_id", ""),
+        "camera": record.get(
+            "camera",
+            "unknown",
+        ),
+        "timestamp": format_timestamp(
+            record.get("timestamp", "")
+        ),
+        "accepted": accepted,
+        "status_label": (
+            ui_text["dashboard_accepted"]
+            if accepted
+            else ui_text["dashboard_rejected"]
+        ),
+        "snapshot": safe_media_url(
+            record.get("snapshot")
+        ),
+        "crop": safe_media_url(
+            record.get("crop")
+        ),
+        "detector_score": format_percentage(
+            detector.get("score", 0)
+        ),
+        "top_score": format_percentage(
+            decision.get("top_score", 0)
+        ),
+        "second_score": format_percentage(
+            decision.get("second_score", 0)
+        ),
+        "margin": format_percentage(
+            decision.get("margin", 0)
+        ),
+        "required_score": format_percentage(
+            decision.get("required_score", 0)
+        ),
+        "required_margin": format_percentage(
+            decision.get("required_margin", 0)
+        ),
+        "classifications": formatted_classifications,
+    }
 
 def read_observations(
     page: int = 1,
@@ -954,6 +1608,13 @@ def read_observations(
         observations.append(
             {
                 "event_id": record.get("event_id"),
+                "detail_url": url_for(
+                    "observation_detail",
+                    event_id=record.get("event_id"),
+                    status=status,
+                    camera=camera,
+                    page=page,
+                ),
                 "camera": record_camera,
                 "timestamp": format_timestamp(
                     record.get("timestamp", "")
@@ -1035,6 +1696,89 @@ def index() -> str:
         total_pages=total_pages,
         status=status,
         camera=camera,
+        language=LANGUAGE,
+        ui_text=ui_text,
+    )
+
+
+@app.get("/observations/<event_id>")
+def observation_detail(
+    event_id: str,
+) -> str:
+    loaded = load_observation(event_id)
+
+    if loaded is None:
+        abort(404)
+
+    record, _ = loaded
+
+    observation = build_observation_detail(
+        record
+    )
+
+    status = request.args.get(
+        "status",
+        "all",
+    )
+
+    camera = request.args.get(
+        "camera",
+        "all",
+    )
+
+    page = request.args.get(
+        "page",
+        1,
+        type=int,
+    )
+
+    return render_template_string(
+        DETAIL_TEMPLATE,
+        observation=observation,
+        status=status,
+        camera=camera,
+        page=max(page, 1),
+        language=LANGUAGE,
+        ui_text=ui_text,
+    )
+
+@app.get("/observations/<event_id>/delete/confirm")
+def confirm_delete_observation(
+    event_id: str,
+) -> str:
+    loaded = load_observation(event_id)
+
+    if loaded is None:
+        abort(404)
+
+    record, _ = loaded
+
+    observation = build_observation_detail(
+        record
+    )
+
+    status = request.args.get(
+        "status",
+        "all",
+    )
+
+    camera = request.args.get(
+        "camera",
+        "all",
+    )
+
+    page = request.args.get(
+        "page",
+        1,
+        type=int,
+    )
+
+    return render_template_string(
+        DELETE_CONFIRM_TEMPLATE,
+        observation=observation,
+        status=status,
+        camera=camera,
+        page=max(page, 1),
         language=LANGUAGE,
         ui_text=ui_text,
     )
