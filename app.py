@@ -171,16 +171,6 @@ ENABLED_CAMERAS = [
     if camera.enabled
 ]
 
-if len(ENABLED_CAMERAS) > 1:
-    raise RuntimeError(
-        "Multiple enabled cameras are configured, "
-        "but multi-camera runtime is not enabled yet"
-    )
-
-ACTIVE_CAMERA = ENABLED_CAMERAS[0]
-
-CAMERA_NAME = ACTIVE_CAMERA.name
-CAMERA_URL = ACTIVE_CAMERA.url
 
 RUN_ONCE = os.getenv("RUN_ONCE", "true").strip().lower() in {
     "1",
@@ -336,37 +326,11 @@ def store_detection(
 
     return json_target
 
-def cleanup_directory(
-    directory: Path,
-    retention_days: int,
+
+def create_snapshot(
+    camera: CameraConfig,
+    target: Path
 ) -> None:
-
-    if retention_days <= 0:
-        return
-
-    cutoff = (
-        datetime.now()
-        - timedelta(days=retention_days)
-    )
-
-    for file in directory.glob("*"):
-        if not file.is_file():
-            continue
-
-        modified = datetime.fromtimestamp(
-            file.stat().st_mtime
-        )
-
-        if modified < cutoff:
-            file.unlink()
-
-            print(
-                f"Retention: gelöscht {file}",
-                flush=True,
-            )
-
-
-def create_snapshot(target: Path) -> None:
     command = [
         "ffmpeg",
         "-hide_banner",
@@ -375,7 +339,7 @@ def create_snapshot(target: Path) -> None:
         "-rtsp_transport",
         "tcp",
         "-i",
-        CAMERA_URL,
+        camera.url,
         "-frames:v",
         "1",
         "-y",
@@ -500,7 +464,9 @@ def request_stop(
 signal.signal(signal.SIGTERM, request_stop)
 signal.signal(signal.SIGINT, request_stop)
 
-def run_once() -> int:
+def run_camera(
+    camera: CameraConfig,
+) -> int:
     initialize_storage()
 
     now = datetime.now()
@@ -508,15 +474,18 @@ def run_once() -> int:
 
     snapshot_working_path = (
         WORKING_DIR /
-        f"{timestamp}-{CAMERA_NAME}-full.jpg"
+        f"{timestamp}-{camera.name}-full.jpg"
     )
 
     print(
-        f"Erzeuge Kamerabild für {CAMERA_NAME} ...",
+        f"Erzeuge Kamerabild für {camera.name} ...",
         flush=True,
     )
 
-    create_snapshot(snapshot_working_path)
+    create_snapshot(
+        camera,
+        snapshot_working_path,
+    )
 
     try:
         print(
@@ -542,7 +511,7 @@ def run_once() -> int:
             start=1,
         ):
             event_id = (
-                f"{timestamp}-{CAMERA_NAME}-bird-{number}"
+                f"{timestamp}-{camera.name}-bird-{number}"
             )
 
             crop_working_path = (
@@ -605,7 +574,7 @@ def run_once() -> int:
                     "timestamp": now.isoformat(
                         timespec="microseconds"
                     ),
-                    "camera": CAMERA_NAME,
+                    "camera": camera.name,
                     "detector": detection,
                     "classifications": classifications,
                     "decision": {
@@ -708,13 +677,38 @@ def main() -> int:
     )
 
     print(
-        "Pipeline camera: "
-        f"{ACTIVE_CAMERA.name}",
+        "Multi-camera runtime: sequential",
         flush=True,
     )
 
+
     if RUN_ONCE:
-        return run_once()
+        result = 0
+
+        for camera in ENABLED_CAMERAS:
+            print(
+                f"[{camera.name}] Starte Verarbeitung.",
+                flush=True,
+            )
+
+            try:
+                camera_result = run_camera(camera)
+            except Exception as exc:
+                print(
+                    f"[{camera.name}] Verarbeitung "
+                    f"fehlgeschlagen: "
+                    f"{type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                camera_result = 1
+
+            result = max(
+                result,
+                camera_result,
+            )
+
+        return result
 
     print(
         "Birdfeeder läuft im Dauerbetrieb.",
@@ -728,15 +722,25 @@ def main() -> int:
     while not stop_requested:
         started_at = time.monotonic()
 
-        try:
-            run_once()
-        except Exception as exc:
+        for camera in ENABLED_CAMERAS:
+            if stop_requested:
+                break
+
             print(
-                f"Durchlauf fehlgeschlagen: "
-                f"{type(exc).__name__}: {exc}",
-                file=sys.stderr,
+                f"[{camera.name}] Starte Verarbeitung.",
                 flush=True,
             )
+
+            try:
+                run_camera(camera)
+            except Exception as exc:
+                print(
+                    f"[{camera.name}] Verarbeitung "
+                    f"fehlgeschlagen: "
+                    f"{type(exc).__name__}: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
 
         elapsed = time.monotonic() - started_at
         remaining = max(
