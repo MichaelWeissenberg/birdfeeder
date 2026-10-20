@@ -63,28 +63,15 @@ A lightweight local web interface showing detected birds, confidence scores, tra
 RTSP Cameras
       │
       ▼
-Birdfeeder
+birdfeeder
       │
-      ▼
-CoralAPI
+      ├── CoralAPI → Google Coral Edge TPU
       │
-      ▼
-Google Coral Edge TPU
-
-Birdfeeder
-      │
-      ▼
-/srv/birdfeeder
-      │
-      ├── accepted
-      ├── rejected
-      └── working
-      ▼
-      │
-      ├── birdfeeder-web
-      └── birdfeeder-retention
+      └── /srv/birdfeeder
+              │
+              ├── birdfeeder-web
+              └── birdfeeder-retention
 ```
-
 ---
 
 ## Requirements
@@ -139,9 +126,9 @@ Detailed documentation is available in the `docs` directory.
 
 | Document | Description |
 |-----------|-------------|
-| CAMERAS.md | RTSP camera configuration and examples |
-| CORAL.md | Coral TPU and CoralAPI integration |
-| DEPLOYMENT.md | Installation, deployment and maintenance |
+| CAMERAS.md | Camera configuration and multi-camera runtime |
+| CORAL.md | CoralAPI and Coral TPU integration |
+| DEPLOYMENT.md | Deployment, operations and maintenance |
 
 ---
 
@@ -172,21 +159,11 @@ while keeping the functionality required for bird feeder monitoring.
 
 ## Roadmap
 
-### Observation Management
-
-- Configurable retention policy
-- Default retention of 90 days
-- Delete observations from the web interface
-- Delete all observations from the web interface
-
-### Analytics
-
-- Observation statistics
-- Storage usage information
-
-### User Interface
-
-- Enhanced gallery view
+### v0.6.x
+- Species analytics
+- Long-term activity trends
+- Additional dashboard insights
+- Advanced observation search
 
 ---
 
