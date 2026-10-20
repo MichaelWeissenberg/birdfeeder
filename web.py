@@ -1582,11 +1582,12 @@ def format_bytes(value: object) -> str:
 
 def format_optional_timestamp(
     timestamp: object,
-) -> str:
+) -> str | None:
     if not isinstance(timestamp, str) or not timestamp:
-        return "–"
+        return None
 
     return format_timestamp(timestamp)
+
 
 def build_observation_detail(
     record: dict,
