@@ -3,16 +3,23 @@
 ![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)
 ![Coral TPU](https://img.shields.io/badge/Hardware-Coral%20TPU-FF6F00)
 
+TL;DR Lightweight bird feeder monitoring system powered by Google Coral TPU.
 
-TL:DR Lightweight bird feeder monitoring system powered by Google Coral TPU. Captures RTSP camera snapshots, detects birds, classifies species, stores observations as JSON records, and provides a simple Flask-based web interface for browsing bird visitors and image crops.
+Birdfeeder captures snapshots from one or more RTSP cameras, detects birds,
+classifies species, stores observations as JSON records, and provides a simple
+Flask-based web interface for browsing observations and image crops.
 
 # Birdfeeder
 
 Lightweight bird feeder monitoring powered by Google Coral TPU.
 
-Birdfeeder captures images from an RTSP camera, detects birds using a Coral Edge TPU, classifies bird species, stores observations as JSON records, and presents the results through a lightweight Flask web interface.
+Birdfeeder captures images from one or more RTSP cameras, detects birds using a
+Google Coral Edge TPU through CoralAPI, classifies bird species, stores
+observations as JSON records, and presents the results through a lightweight
+Flask web interface.
 
-The project follows a strong KISS (Keep It Simple, Stupid) philosophy and was created as a lightweight alternative to more complex bird-monitoring stacks.
+The project follows a strong KISS (Keep It Simple, Stupid) philosophy and was
+created as a lightweight alternative to more complex bird-monitoring stacks.
 
 ---
 
@@ -27,16 +34,22 @@ A lightweight local web interface showing detected birds, confidence scores, tra
 ## Features
 
 - RTSP camera integration
+- Sequential multi-camera processing
 - Coral TPU accelerated object detection
 - Bird species classification
 - Automatic crop generation
+- Accepted and uncertain observations
 - JSON-based observation history
+- Automatic retention management
+- Observation detail pages
+- Manual observation deletion
+- Per-camera statistics
+- Storage usage statistics
 - Lightweight Flask web interface
 - Multi-language user interface (English / German)
 - Localized bird names
 - Scientific bird names
-- Intelligent fallback to scientific names
-- Background classification suggestions
+- Health endpoint
 - Docker-based deployment
 - No database required
 - Low resource consumption
@@ -47,24 +60,29 @@ A lightweight local web interface showing detected birds, confidence scores, tra
 ## Architecture
 
 ```text
-RTSP Camera
-    │
-    ▼
+RTSP Cameras
+      │
+      ▼
 Birdfeeder
-    │
-    ▼
+      │
+      ▼
 CoralAPI
-    │
-    ▼
+      │
+      ▼
 Google Coral Edge TPU
 
 Birdfeeder
-    │
-    ▼
-JSON History + Image Crops
-    │
-    ▼
-Flask Web Interface
+      │
+      ▼
+/srv/birdfeeder
+      │
+      ├── accepted
+      ├── rejected
+      └── working
+      ▼
+      │
+      ├── birdfeeder-web
+      └── birdfeeder-retention
 ```
 
 ---
@@ -73,7 +91,7 @@ Flask Web Interface
 
 ### Hardware
 
-- RTSP-compatible IP camera
+- One or more RTSP-compatible IP cameras
 - Google Coral Edge TPU (USB, PCIe or M.2)
 - Linux host
 
@@ -88,43 +106,26 @@ Flask Web Interface
 
 ## Quick Start
 
-Configurable options include:
-
-- Camera URL
-- CoralAPI endpoint
-- Detection threshold
-- Retention settings
-- Interface language (`LANGUAGE=de|en`)
-
-Clone the repository:
-
-```bash
-git clone git@github.com:MichaelWeissenberg/birdfeeder.git
-
-cd birdfeeder
-```
-
 Create a local configuration:
 
 ```bash
 cp .env.example .env
-```
-
-Adjust camera and CoralAPI settings:
-
-```bash
 nano .env
 ```
 
-Build and start the services:
+Build the shared image:
 
 ```bash
 docker compose build birdfeeder
+```
 
+Start all services:
+
+```bash
 docker compose up -d
 ```
 
-Open the web interface:
+Open the WebUI:
 
 ```text
 http://SERVER-IP:8080
