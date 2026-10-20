@@ -467,7 +467,6 @@ signal.signal(signal.SIGINT, request_stop)
 def run_camera(
     camera: CameraConfig,
 ) -> int:
-    initialize_storage()
 
     now = datetime.now()
     timestamp = now.strftime("%Y%m%d-%H%M%S-%f")
@@ -482,12 +481,12 @@ def run_camera(
         flush=True,
     )
 
-    create_snapshot(
-        camera,
-        snapshot_working_path,
-    )
-
     try:
+        create_snapshot(
+            camera,
+            snapshot_working_path,
+        )
+
         print(
             "Suche Vögel auf der Coral ...",
             flush=True,
