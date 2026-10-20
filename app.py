@@ -329,7 +329,7 @@ def store_detection(
 
 def create_snapshot(
     camera: CameraConfig,
-    target: Path
+    target: Path,
 ) -> None:
     command = [
         "ffmpeg",
