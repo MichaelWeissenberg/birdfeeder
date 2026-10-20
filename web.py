@@ -85,6 +85,47 @@ WEB_PORT = int(
     )
 )
 
+
+def load_camera_labels() -> dict[str, str]:
+    try:
+        camera_count = int(
+            os.getenv(
+                "CAMERA_COUNT",
+                "0",
+            )
+        )
+    except ValueError:
+        return {}
+
+    labels = {}
+
+    for number in range(
+        1,
+        camera_count + 1,
+    ):
+        prefix = f"CAMERA_{number}"
+
+        name = os.getenv(
+            f"{prefix}_NAME",
+            f"camera_{number}",
+        ).strip()
+
+        if not name:
+            continue
+
+        label = os.getenv(
+            f"{prefix}_LABEL",
+            name,
+        ).strip() or name
+
+        labels[name] = label
+
+    return labels
+
+
+CAMERA_LABELS = load_camera_labels()
+
+
 app = Flask(__name__)
 
 def resolve_data_path(path_value: str) -> Path:
@@ -699,7 +740,7 @@ PAGE_TEMPLATE = """
                 {% for camera, values in statistics.cameras.items() %}
                     <div class="camera-card">
                         <p class="camera-name">
-                            {{ camera }}
+                            {{ values.label }}
                         </p>
 
                         <p class="camera-stats">
@@ -783,14 +824,15 @@ PAGE_TEMPLATE = """
                         {{ ui_text.filter_all_cameras }}
                     </option>
 
-                    {% for camera_name in statistics.cameras %}
+                    {% for camera_name, values in statistics.cameras.items() %}
                         <option
                             value="{{ camera_name }}"
                             {% if camera == camera_name %}selected{% endif %}
                         >
-                            {{ camera_name }}
+                            {{ values.label }}
                         </option>
                     {% endfor %}
+
                 </select>
             </div>
 
@@ -1198,7 +1240,7 @@ DETAIL_TEMPLATE = """
                 <h2>{{ ui_text.detail_information }}</h2>
                 <dl class="detail-list">
                     <dt>{{ ui_text.detail_status }}</dt><dd>{{ observation.status_label }}</dd>
-                    <dt>{{ ui_text.detail_camera }}</dt><dd>{{ observation.camera }}</dd>
+                    <dt>{{ ui_text.detail_camera }}</dt><dd>{{ observation.camera_label }}</dd>
                     <dt>{{ ui_text.detail_timestamp }}</dt><dd>{{ observation.timestamp }}</dd>
                     <dt>{{ ui_text.detail_event_id }}</dt><dd>{{ observation.event_id }}</dd>
                 </dl>
@@ -1422,7 +1464,7 @@ DELETE_CONFIRM_TEMPLATE = """
                 <br>
 
                 {{ ui_text.detail_camera }}:
-                {{ observation.camera }}
+                {{ observation.camera_label }}
                 <br>
 
                 {{ ui_text.detail_timestamp }}:
@@ -1589,11 +1631,17 @@ def build_observation_detail(
         record.get("accepted", False)
     )
 
+    camera_name = record.get(
+        "camera",
+        "unknown",
+    )
+
     return {
         "event_id": record.get("event_id", ""),
-        "camera": record.get(
-            "camera",
-            "unknown",
+        "camera": camera_name,
+        "camera_label": CAMERA_LABELS.get(
+            camera_name,
+            camera_name,
         ),
         "timestamp": format_timestamp(
             record.get("timestamp", "")
@@ -1761,6 +1809,10 @@ def read_observations(
                     page=page,
                 ),
                 "camera": record_camera,
+                "camera_label": CAMERA_LABELS.get(
+                    record_camera,
+                    record_camera,
+                ),
                 "timestamp": format_timestamp(
                     record.get("timestamp", "")
                 ),
@@ -1831,6 +1883,15 @@ def index() -> str:
     )
 
     statistics = build_stats()
+
+    for camera_name, values in statistics.get(
+        "cameras",
+        {},
+    ).items():
+        values["label"] = CAMERA_LABELS.get(
+            camera_name,
+            camera_name,
+        )
 
     storage = statistics.get(
         "storage",
