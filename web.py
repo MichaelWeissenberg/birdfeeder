@@ -308,6 +308,45 @@ PAGE_TEMPLATE = """
             font-size: 0.9rem;
         }
 
+                .system-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .system-card {
+            padding: 1.25rem;
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            background: var(--card);
+            box-shadow: 0 8px 24px rgb(0 0 0 / 5%);
+        }
+
+        .system-card h2 {
+            margin: 0 0 1rem;
+            font-size: 1.1rem;
+        }
+
+        .system-list {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 0.75rem 1rem;
+            margin: 0;
+        }
+
+        .system-list dt {
+            color: var(--muted);
+        }
+
+        .system-list dd {
+            margin: 0;
+            color: var(--text);
+            font-weight: 700;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
         .section-title {
             margin: 2rem 0 1rem;
             font-size: 1.35rem;
@@ -345,6 +384,10 @@ PAGE_TEMPLATE = """
         @media (max-width: 800px) {
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr);
+            }
+
+            .system-grid {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -578,6 +621,71 @@ PAGE_TEMPLATE = """
                 <p class="stat-label">
                     {{ ui_text.dashboard_acceptance_rate }}
                 </p>
+            </div>
+        </section>
+
+
+        <section class="system-grid">
+            <div class="system-card">
+                <h2>
+                    {{ ui_text.dashboard_system }}
+                </h2>
+
+                <dl class="system-list">
+                    <dt>
+                        {{ ui_text.dashboard_observations_today }}
+                    </dt>
+                    <dd>
+                        {{ statistics.observations_today }}
+                    </dd>
+
+                    <dt>
+                        {{ ui_text.dashboard_last_observation }}
+                    </dt>
+                    <dd>
+                        {% if statistics.last_observation_formatted %}
+                            {{ statistics.last_observation_formatted }}
+                        {% else %}
+                            {{ ui_text.dashboard_never }}
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+
+            <div class="system-card">
+                <h2>
+                    {{ ui_text.dashboard_storage }}
+                </h2>
+
+                <dl class="system-list">
+                    <dt>
+                        {{ ui_text.dashboard_storage_total }}
+                    </dt>
+                    <dd>
+                        {{ statistics.storage_formatted.total }}
+                    </dd>
+
+                    <dt>
+                        {{ ui_text.dashboard_storage_accepted }}
+                    </dt>
+                    <dd>
+                        {{ statistics.storage_formatted.accepted }}
+                    </dd>
+
+                    <dt>
+                        {{ ui_text.dashboard_storage_rejected }}
+                    </dt>
+                    <dd>
+                        {{ statistics.storage_formatted.rejected }}
+                    </dd>
+
+                    <dt>
+                        {{ ui_text.dashboard_storage_working }}
+                    </dt>
+                    <dd>
+                        {{ statistics.storage_formatted.working }}
+                    </dd>
+                </dl>
             </div>
         </section>
 
@@ -1401,6 +1509,43 @@ def format_percentage(value: object) -> str:
     except (TypeError, ValueError):
         return "–"
 
+
+def format_bytes(value: object) -> str:
+    try:
+        size = max(0, int(value))
+    except (TypeError, ValueError):
+        return "–"
+
+    units = (
+        "B",
+        "KB",
+        "MB",
+        "GB",
+        "TB",
+    )
+
+    formatted_size = float(size)
+
+    for unit in units:
+        if formatted_size < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(formatted_size)} {unit}"
+
+            return f"{formatted_size:.1f} {unit}"
+
+        formatted_size /= 1024
+
+    return "–"
+
+
+def format_optional_timestamp(
+    timestamp: object,
+) -> str:
+    if not isinstance(timestamp, str) or not timestamp:
+        return "–"
+
+    return format_timestamp(timestamp)
+
 def build_observation_detail(
     record: dict,
 ) -> dict:
@@ -1686,6 +1831,32 @@ def index() -> str:
     )
 
     statistics = build_stats()
+
+    storage = statistics.get(
+        "storage",
+        {},
+    )
+
+    statistics["storage_formatted"] = {
+        "accepted": format_bytes(
+            storage.get("accepted_bytes", 0)
+        ),
+        "rejected": format_bytes(
+            storage.get("rejected_bytes", 0)
+        ),
+        "working": format_bytes(
+            storage.get("working_bytes", 0)
+        ),
+        "total": format_bytes(
+            storage.get("total_bytes", 0)
+        ),
+    }
+
+    statistics["last_observation_formatted"] = (
+        format_optional_timestamp(
+            statistics.get("last_observation")
+        )
+    )
 
     return render_template_string(
         PAGE_TEMPLATE,
