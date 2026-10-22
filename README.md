@@ -86,7 +86,7 @@ birdfeeder
 
 - Docker
 - Docker Compose
-- CoralAPI
+- CoralAPI https://github.com/nathan-v/coralapi
 - Python 3.12 (for local development)
 
 ---
@@ -204,5 +204,17 @@ Many thanks to the photographers for providing freely usable reference images th
 
 Photo licensing and attribution information can be found on Pexels:
 https://www.pexels.com/license/
+
+---
+
+## Acknowledgements
+
+Birdfeeder builds upon the excellent CoralAPI project by Nathan V.
+
+CoralAPI provides a lightweight REST interface for Google Coral Edge TPU based image classification and object detection.
+
+- CoralAPI: https://github.com/nathan-v/coralapi
+
+Many thanks to Nathan V for making this project available as open source.
 
 ---

@@ -7,6 +7,15 @@ The Birdfeeder application does not access the Edge TPU hardware directly.
 All inference requests are sent over HTTP to a separately deployed CoralAPI
 service.
 
+## About CoralAPI
+
+Birdfeeder uses CoralAPI as the inference backend for image classification on Google Coral Edge TPU devices.
+
+CoralAPI is developed and maintained by Nathan V:
+https://github.com/nathan-v/coralapi
+
+This document focuses on the Birdfeeder specific integration and deployment of CoralAPI.
+
 ## Architecture
 
 ```text
